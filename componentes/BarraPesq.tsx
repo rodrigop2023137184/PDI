@@ -13,6 +13,7 @@ interface BarraPesqProps {
   onMudar: (texto: string) => void;
   onPesquisar: () => void;
   onFiltros?: () => void;
+  onAdicionar?: () => void;
 }
 
 // ── Constantes ────────────────────────────────────────
@@ -23,7 +24,7 @@ const cores = {
 };
 
 // ── Componente ────────────────────────────────────────
-export default function BarraPesq({ valor, onMudar, onPesquisar, onFiltros }: BarraPesqProps) {
+export default function BarraPesq({ valor, onMudar, onPesquisar, onFiltros, onAdicionar }: BarraPesqProps) {
   return (
     <View style={styles.container}>
 
@@ -42,6 +43,12 @@ export default function BarraPesq({ valor, onMudar, onPesquisar, onFiltros }: Ba
         onSubmitEditing={onPesquisar}
         returnKeyType="search"
       />
+
+      {onAdicionar && (
+        <TouchableOpacity style={styles.botaoAdicionar} onPress={onAdicionar}>
+          <Ionicons name="add-circle-outline" size={20} color={cores.verde} />
+       </TouchableOpacity>
+      )}
 
       {/* Botão filtros — lado direito */}
       {onFiltros && (
@@ -79,4 +86,8 @@ const styles = StyleSheet.create({
     padding: 8,
     marginLeft: 4,
   },
+  botaoAdicionar: {
+  padding: 8,
+  marginLeft: 4,
+},
 });

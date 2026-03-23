@@ -7,8 +7,8 @@ export interface User {
 }
 
 export interface Ingrediente {
-  nome: string;
-  quantidade: string;
+  name: string;
+  quantity: string;
 }
 
 export interface Instrucao {
