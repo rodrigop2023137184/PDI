@@ -18,18 +18,43 @@ export type TabParamList = {
   Perfil: undefined;
 };
 
+const cores = {
+  verde: '#37914B',
+  laranja: '#FA9B2D',
+  branco: '#FFFFFF',
+  bege: '#F5F0E1',
+};
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
 function TabNavigator() {
   return (
-    <Tab.Navigator>
+    <Tab.Navigator
+       screenOptions={{
+         headerShown: false,
+         tabBarActiveTintColor: cores.verde,
+         tabBarInactiveTintColor: '#000000',
+         tabBarStyle: {
+           backgroundColor: cores.branco,
+           borderTopWidth: 0,
+           borderTopLeftRadius: 20,
+           borderTopRightRadius: 20,
+           elevation: 8,
+           shadowColor: '#000',
+           shadowOffset: { width: 0, height: -2 },
+           shadowOpacity: 0.08,
+           shadowRadius: 4,
+           height: 65,
+       },
+        }}
+    >
+
       <Tab.Screen
         name="Início"
         component={HomeScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color="green" />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
@@ -38,7 +63,7 @@ function TabNavigator() {
         component={ProfileScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color="green" />
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
       />
@@ -60,7 +85,7 @@ export default function App() {
         <Stack.Screen
           name="DetalheReceita"
           component={RecipeDetailScreen}
-          options={{ title: 'Receita' }}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

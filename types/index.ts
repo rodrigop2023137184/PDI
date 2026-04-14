@@ -1,28 +1,36 @@
 export interface User {
   id: string;
-  email: string;
   display_name: string | null;
   created_at: string;
   updated_at: string;
 }
-
-export interface Ingrediente {
-  name: string;
-  quantity: string;
-}
-
 export interface Instrucao {
-  passo: number;
-  descricao: string;
+  step: number;
+  text: string;
 }
 
+// Tabela ingredientes
+export interface Ingrediente {
+  id: string;
+  nome: string;
+  imagem_url: string | null;
+}
+
+// Item do JSONB dentro de receitas.ingredientes
+export interface ReceitaIngrediente {
+  ingrediente_id: string;
+  quantity: string;
+  ingrediente?: Ingrediente; // join opcional
+}
+
+// Atualizar Receita
 export interface Receita {
   id: string;
   nome: string;
   imagem_url: string | null;
   prep_tempo_min: number;
   dieta_type: 'vegetariana' | 'vegan' | 'sem_gluten' | 'omnivora' | null;
-  ingredientes: Ingrediente[];
+  ingredientes: ReceitaIngrediente[]; // ← atualizado
   instrucoes: Instrucao[];
   calorias: number | null;
   proteinas_g: number | null;

@@ -84,49 +84,67 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   async function pesquisarReceitas() {
-    if (ingredientes.length === 0 && !pesquisa.trim()) return;
+  if (ingredientes.length === 0 && !pesquisa.trim()) return;
 
-    setPesquisando(true);
-    try {
-      // ── Pesquisa por ingredientes ──────────────────
-      if (ingredientes.length > 0) {
-        const listaFinal = pesquisa.trim()
-          ? [...ingredientes, pesquisa.trim().toLowerCase()]
-          : ingredientes;
+  setPesquisando(true);
+  try {
+    // ── Pesquisa por ingredientes ──────────────────
+    if (ingredientes.length > 0) {
+      const listaFinal = pesquisa.trim()
+        ? [...ingredientes, pesquisa.trim().toLowerCase()]
+        : ingredientes;
 
-        let query = supabase
-          .from('receitas')
-          .select('id, nome, imagem_url, prep_tempo_min, dieta_type');
+      // Passo 1 — ir buscar os IDs dos ingredientes pelo nome
+      const { data: ingsData, error: ingsError } = await supabase
+        .from('ingredientes')
+        .select('id, nome')
+        .in('nome', listaFinal);
 
-        listaFinal.forEach(ing => {
-          query = query.filter(
-            'ingredientes',
-            'cs',
-            `[{"name": "${ing}"}]`
-          );
-        });
+      if (ingsError) throw ingsError;
 
-        const { data, error } = await query.limit(20);
-        if (error) throw error;
-        setResultados((data as Receita[]) ?? []);
-
-      // ── Pesquisa por nome ──────────────────────────
-      } else {
-        const { data, error } = await supabase
-          .from('receitas')
-          .select('id, nome, imagem_url, prep_tempo_min, dieta_type')
-          .ilike('nome', `%${pesquisa.trim()}%`)
-          .limit(20);
-
-        if (error) throw error;
-        setResultados((data as Receita[]) ?? []);
+      // Verificar se todos os ingredientes foram encontrados
+      if (!ingsData || ingsData.length === 0) {
+        setResultados([]);
+        setPesquisando(false);
+        return;
       }
-    } catch (error) {
-      console.error('Erro ao pesquisar:', error);
-    } finally {
-      setPesquisando(false);
+
+      const ids = ingsData.map(i => i.id);
+
+      // Passo 2 — filtrar receitas que contêm todos os ingredientes
+      let query = supabase
+        .from('receitas')
+        .select('id, nome, imagem_url, prep_tempo_min, dieta_type');
+
+      ids.forEach(id => {
+        query = query.filter(
+          'ingredientes',
+          'cs',
+          `[{"ingrediente_id": "${id}"}]`
+        );
+      });
+
+      const { data, error } = await query.limit(20);
+      if (error) throw error;
+      setResultados((data as Receita[]) ?? []);
+
+    // ── Pesquisa por nome ──────────────────────────
+    } else {
+      const { data, error } = await supabase
+        .from('receitas')
+        .select('id, nome, imagem_url, prep_tempo_min, dieta_type')
+        .ilike('nome', `%${pesquisa.trim()}%`)
+        .limit(20);
+
+      if (error) throw error;
+      setResultados((data as Receita[]) ?? []);
     }
+  } catch (error) {
+    console.error('Erro ao pesquisar:', error);
+  } finally {
+    setPesquisando(false);
   }
+}
 
   function limparPesquisa() {
     setPesquisa('');
@@ -178,6 +196,7 @@ export default function HomeScreen({ navigation }: Props) {
         onMudar={setPesquisa}
         onPesquisar={pesquisarReceitas}
         onAdicionar={adicionarIngrediente}
+        onFiltros={() => {/* navegação para ecrã de filtros */}}
       />
 
       {/* Tags de ingredientes */}
@@ -295,7 +314,7 @@ export default function HomeScreen({ navigation }: Props) {
 // ── Estilos ───────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.bege, padding: 16 },
-  scrollConteudo: { flexGrow: 1, paddingBottom: 24 },
+  scrollConteudo: { flexGrow: 1, paddingBottom: 80 },
 
   // Saudação
   saudacaoContainer: { marginBottom: 16 },
