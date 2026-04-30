@@ -5,27 +5,35 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Image,
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
+import { RootStackParamList } from '../../App';
+
+type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
-  branco: '#FFFFFF',
   bege: '#F5F0E1',
+  branco: '#FFFFFF',
   cinzaTexto: '#333',
 };
 
 export default function LoginScreen() {
+  const navigation = useNavigation<NavProp>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function entrar() {
+  async function handleLogin() {
     if (!email || !password) {
       Alert.alert('Campos em falta', 'Preenche o email e a palavra-passe.');
       return;
@@ -37,111 +45,117 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <View style={styles.container}>
+      {/* Fundo ilustrado — preenche o ecrã todo */}
+      <Image
+        source={require('../../assets/fundo_login.png')}
+        style={styles.fundo}
+        resizeMode="cover"
+      />
 
-        {/* Decorações de fundo — substituir por imagens reais */}
-        <Text style={[styles.decor, styles.decorFrango]}>🍗</Text>
-        <Text style={[styles.decor, styles.decorOvo]}>🍳</Text>
-        <Text style={[styles.decor, styles.decorLimao]}>🍋</Text>
-
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCirculo}>
-            <Text style={styles.logoEmoji}>👨‍🍳</Text>
-            <Text style={styles.logoTexto}>KOMIKALATE</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo central por cima do fundo */}
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
-        </View>
 
-        {/* Formulário */}
-        <View style={styles.formulario}>
-          <Text style={styles.label}>E-mail</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="joao@gmail.com"
-            placeholderTextColor="#BBB"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
+          {/* Formulário */}
+          <View style={styles.form}>
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="joao@gmail.com"
+              placeholderTextColor="#BBB"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={email}
+              onChangeText={setEmail}
+            />
 
-          <Text style={styles.label}>Palavra-passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="........"
-            placeholderTextColor="#BBB"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+            <Text style={styles.label}>Palavra-passe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="........"
+              placeholderTextColor="#BBB"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
 
-          <TouchableOpacity onPress={() => { /* TODO: recuperar password */ }}>
-            <Text style={styles.esqueceu}>Esqueceu-se da palavra-passe?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.botaoEntrar, loading && { opacity: 0.7 }]}
-            onPress={entrar}
-            disabled={loading}
-          >
-            <Text style={styles.botaoEntrarTexto}>
-              {loading ? 'A entrar...' : 'Entrar'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.registoLinha}>
-            <Text style={styles.registoTexto}>Não tens conta? </Text>
-            <TouchableOpacity onPress={() => { /* TODO: navegar para registo */ }}>
-              <Text style={styles.registoLink}>Regista-te</Text>
+            <TouchableOpacity onPress={() => { /* TODO: recuperar password */ }}>
+              <Text style={styles.esqueceu}>Esqueceu-se da palavra-passe?</Text>
             </TouchableOpacity>
-          </View>
-        </View>
 
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={[styles.botaoEntrar, loading && { opacity: 0.7 }]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={cores.branco} />
+              ) : (
+                <Text style={styles.botaoEntrarTexto}>Entrar</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.registoLinha}>
+              <Text style={styles.registoTexto}>Não tens conta? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Registo')}>
+                <Text style={styles.registoLink}>Regista-te</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: cores.bege },
-  scroll: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 60, paddingBottom: 40 },
-
-  // Decorações
-  decor: { position: 'absolute', fontSize: 44 },
-  decorFrango: { top: 110, left: 10, transform: [{ rotate: '-20deg' }] },
-  decorOvo: { top: 40, right: 10 },
-  decorLimao: { top: 150, right: 20 },
+  container: {
+    flex: 1,
+    backgroundColor: cores.bege,
+  },
+  fundo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 28,
+    paddingBottom: 40,
+  },
 
   // Logo
-  logoContainer: { alignItems: 'center', marginTop: 10, marginBottom: 40 },
-  logoCirculo: {
+  logoContainer: {
+    alignItems: 'center',
+    marginTop: 80,
+    marginBottom: 100,
+  },
+  logo: {
     width: 150,
     height: 150,
-    borderRadius: 75,
-    backgroundColor: cores.branco,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  logoEmoji: { fontSize: 48 },
-  logoTexto: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: cores.laranja,
-    marginTop: 4,
-    letterSpacing: 1,
   },
 
   // Formulário
-  formulario: { width: '100%' },
+  form: { width: '100%' },
   label: {
     fontSize: 15,
     fontWeight: '600',

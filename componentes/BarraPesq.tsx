@@ -42,6 +42,11 @@ export default function BarraPesq({ valor, onMudar, onPesquisar, onFiltros, onAd
         onChangeText={onMudar}
         onSubmitEditing={onPesquisar}
         returnKeyType="search"
+        autoCorrect={false}
+        autoCapitalize="none"
+        keyboardType="default"
+        autoComplete="off"
+        spellCheck={false}
       />
 
       {onAdicionar && (

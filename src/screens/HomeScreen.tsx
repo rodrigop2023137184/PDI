@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import BarraPesq from '../../componentes/BarraPesq';
 import {
   View,
@@ -9,6 +9,11 @@ import {
   ActivityIndicator,
   StyleSheet,
   RefreshControl,
+  Modal,
+  Pressable,
+  Animated,
+  PanResponder,
+  Easing,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,6 +42,27 @@ const filtros = [
   { label: 'Omnívora', valor: 'omnivora' },
 ];
 
+const opcoesDieta = [
+  { label: 'Vegetariana', valor: 'vegetariana' },
+  { label: 'Vegan', valor: 'vegan' },
+  { label: 'Omnívora', valor: 'omnivora' },
+];
+
+const LIMITE_ALTA_PROTEINA = 20;
+const LIMITE_BAIXA_GORDURA = 10;
+
+const opcoesTempo = [
+  { label: '≤ 15 min', valor: 15 },
+  { label: '≤ 30 min', valor: 30 },
+  { label: '≤ 60 min', valor: 60 },
+];
+
+const opcoesCalorias = [
+  { label: '≤ 300 kcal', valor: 300 },
+  { label: '≤ 500 kcal', valor: 500 },
+  { label: '≤ 800 kcal', valor: 800 },
+];
+
 // ── Componente ────────────────────────────────────────
 export default function HomeScreen({ navigation }: Props) {
   const [recomendadas, setRecomendadas] = useState<Receita[]>([]);
@@ -46,17 +72,85 @@ export default function HomeScreen({ navigation }: Props) {
   const [pesquisando, setPesquisando] = useState(false);
   const [ingredientes, setIngredientes] = useState<string[]>([]);
   const [filtroAtivo, setFiltroAtivo] = useState<string | null>(null);
+  const [modalFiltrosVisivel, setModalFiltrosVisivel] = useState(false);
+  const [filtroTempoMax, setFiltroTempoMax] = useState<number | null>(null);
+  const [filtroCaloriasMax, setFiltroCaloriasMax] = useState<number | null>(null);
+  const [filtroDietaModal, setFiltroDietaModal] = useState<string | null>(null);
+  const [filtroAltoProteina, setFiltroAltoProteina] = useState(false);
+  const [filtroBaixoGordura, setFiltroBaixoGordura] = useState(false);
 
-  async function carregarReceitas(dietType?: string) {
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  function fecharModalFiltros() {
+    Animated.timing(translateY, {
+      toValue: 700,
+      duration: 320,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        translateY.setValue(0);
+        setModalFiltrosVisivel(false);
+      }
+    });
+  }
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 4,
+      onPanResponderGrant: () => {
+        translateY.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          translateY.setValue(gestureState.dy);
+        } else {
+          translateY.setValue(gestureState.dy / 4);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 120 || gestureState.vy > 0.8) {
+          fecharModalFiltros();
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            tension: 70,
+            friction: 12,
+            velocity: gestureState.vy,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  type FiltrosOpts = {
+    dietType?: string | null;
+    tempoMax?: number | null;
+    caloriasMax?: number | null;
+    altoProteina?: boolean;
+    baixoGordura?: boolean;
+  };
+
+  async function carregarReceitas(opts: FiltrosOpts = {}) {
+    const dietType = opts.dietType ?? filtroAtivo;
+    const tempoMax = opts.tempoMax !== undefined ? opts.tempoMax : filtroTempoMax;
+    const caloriasMax = opts.caloriasMax !== undefined ? opts.caloriasMax : filtroCaloriasMax;
+    const altoProteina = opts.altoProteina !== undefined ? opts.altoProteina : filtroAltoProteina;
+    const baixoGordura = opts.baixoGordura !== undefined ? opts.baixoGordura : filtroBaixoGordura;
+
     setLoading(true);
     try {
       let query = supabase
         .from('receitas')
         .select('id, nome, imagem_url, prep_tempo_min, dieta_type');
 
-      if (dietType) {
-        query = query.eq('dieta_type', dietType);
-      }
+      if (dietType) query = query.eq('dieta_type', dietType);
+      if (tempoMax) query = query.lte('prep_tempo_min', tempoMax);
+      if (caloriasMax) query = query.lte('calorias', caloriasMax);
+      if (altoProteina) query = query.gte('proteinas_g', LIMITE_ALTA_PROTEINA);
+      if (baixoGordura) query = query.lte('fats_g', LIMITE_BAIXA_GORDURA);
 
       const { data, error } = await query
         .order('data_criacao', { ascending: false })
@@ -69,6 +163,32 @@ export default function HomeScreen({ navigation }: Props) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function abrirModalFiltros() {
+    setFiltroDietaModal(filtroAtivo);
+    setModalFiltrosVisivel(true);
+  }
+
+  function aplicarFiltrosModal() {
+  setFiltroAtivo(filtroDietaModal);
+  setModalFiltrosVisivel(false);
+  limparPesquisa();
+  carregarReceitas({
+    dietType: filtroDietaModal,
+    tempoMax: filtroTempoMax,
+    caloriasMax: filtroCaloriasMax,
+    altoProteina: filtroAltoProteina,
+    baixoGordura: filtroBaixoGordura,
+  });
+}
+
+  function limparFiltrosModal() {
+    setFiltroDietaModal(null);
+    setFiltroTempoMax(null);
+    setFiltroCaloriasMax(null);
+    setFiltroAltoProteina(false);
+    setFiltroBaixoGordura(false);
   }
 
   function adicionarIngrediente() {
@@ -94,22 +214,26 @@ export default function HomeScreen({ navigation }: Props) {
         ? [...ingredientes, pesquisa.trim().toLowerCase()]
         : ingredientes;
 
-      // Passo 1 — ir buscar os IDs dos ingredientes pelo nome
-      const { data: ingsData, error: ingsError } = await supabase
-        .from('ingredientes')
-        .select('id, nome')
-        .in('nome', listaFinal);
+      // Passo 1 — ir buscar os IDs dos ingredientes pelo nome (case-insensitive, um por um)
+      const resultadosIngs = await Promise.all(
+        listaFinal.map(nome =>
+          supabase
+            .from('ingredientes')
+            .select('id, nome')
+            .ilike('nome', nome)
+            .maybeSingle()
+        )
+      );
 
-      if (ingsError) throw ingsError;
-
-      // Verificar se todos os ingredientes foram encontrados
-      if (!ingsData || ingsData.length === 0) {
+      // Se algum ingrediente não foi encontrado → sem resultados
+      const faltaAlgum = resultadosIngs.some(r => !r.data);
+      if (faltaAlgum) {
         setResultados([]);
         setPesquisando(false);
         return;
       }
 
-      const ids = ingsData.map(i => i.id);
+      const ids = resultadosIngs.map(r => r.data!.id);
 
       // Passo 2 — filtrar receitas que contêm todos os ingredientes
       let query = supabase
@@ -196,7 +320,7 @@ export default function HomeScreen({ navigation }: Props) {
         onMudar={setPesquisa}
         onPesquisar={pesquisarReceitas}
         onAdicionar={adicionarIngrediente}
-        onFiltros={() => {/* navegação para ecrã de filtros */}}
+        onFiltros={abrirModalFiltros}
       />
 
       {/* Tags de ingredientes */}
@@ -229,7 +353,7 @@ export default function HomeScreen({ navigation }: Props) {
               const novoFiltro = filtroAtivo === filtro.valor ? null : filtro.valor;
               setFiltroAtivo(novoFiltro);
               limparPesquisa();
-              carregarReceitas(novoFiltro ?? undefined);
+              carregarReceitas({ dietType: novoFiltro });
             }}
             style={[
               styles.filtroBotao,
@@ -255,7 +379,7 @@ export default function HomeScreen({ navigation }: Props) {
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={() => carregarReceitas(filtroAtivo ?? undefined)}
+            onRefresh={() => carregarReceitas()}
             colors={[cores.verde]}
             tintColor={cores.verde}
           />
@@ -307,6 +431,123 @@ export default function HomeScreen({ navigation }: Props) {
           ))
         )}
       </ScrollView>
+
+      {/* Modal de filtros */}
+      <Modal
+        visible={modalFiltrosVisivel}
+        animationType="slide"
+        transparent
+        onRequestClose={fecharModalFiltros}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={fecharModalFiltros}
+        >
+          <Animated.View
+            style={[styles.modalConteudo, { transform: [{ translateY }] }]}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+
+            {/* Zona de arrasto — handle + header */}
+            <View {...panResponder.panHandlers}>
+              <View style={styles.modalHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitulo}>Filtros</Text>
+                <TouchableOpacity onPress={limparFiltrosModal}>
+                  <Text style={styles.modalLimpar}>Limpar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Dieta */}
+              <Text style={styles.modalSecaoTitulo}>Tipo de dieta</Text>
+              <View style={styles.modalChipsContainer}>
+                {opcoesDieta.map((op) => {
+                  const ativo = filtroDietaModal === op.valor;
+                  return (
+                    <TouchableOpacity
+                      key={op.valor}
+                      style={[styles.modalChip, ativo && styles.modalChipAtivo]}
+                      onPress={() => setFiltroDietaModal(ativo ? null : op.valor)}
+                    >
+                      <Text style={[styles.modalChipTexto, ativo && styles.modalChipTextoAtivo]}>
+                        {op.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Tempo */}
+              <Text style={styles.modalSecaoTitulo}>Tempo de preparação</Text>
+              <View style={styles.modalChipsContainer}>
+                {opcoesTempo.map((op) => {
+                  const ativo = filtroTempoMax === op.valor;
+                  return (
+                    <TouchableOpacity
+                      key={op.valor}
+                      style={[styles.modalChip, ativo && styles.modalChipAtivo]}
+                      onPress={() => setFiltroTempoMax(ativo ? null : op.valor)}
+                    >
+                      <Text style={[styles.modalChipTexto, ativo && styles.modalChipTextoAtivo]}>
+                        {op.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Calorias */}
+              <Text style={styles.modalSecaoTitulo}>Calorias</Text>
+              <View style={styles.modalChipsContainer}>
+                {opcoesCalorias.map((op) => {
+                  const ativo = filtroCaloriasMax === op.valor;
+                  return (
+                    <TouchableOpacity
+                      key={op.valor}
+                      style={[styles.modalChip, ativo && styles.modalChipAtivo]}
+                      onPress={() => setFiltroCaloriasMax(ativo ? null : op.valor)}
+                    >
+                      <Text style={[styles.modalChipTexto, ativo && styles.modalChipTextoAtivo]}>
+                        {op.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Outros */}
+              <Text style={styles.modalSecaoTitulo}>Outros</Text>
+              <View style={styles.modalChipsContainer}>
+                <TouchableOpacity
+                  style={[styles.modalChip, filtroAltoProteina && styles.modalChipAtivo]}
+                  onPress={() => setFiltroAltoProteina((v) => !v)}
+                >
+                  <Text style={[styles.modalChipTexto, filtroAltoProteina && styles.modalChipTextoAtivo]}>
+                    Alto em proteína
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalChip, filtroBaixoGordura && styles.modalChipAtivo]}
+                  onPress={() => setFiltroBaixoGordura((v) => !v)}
+                >
+                  <Text style={[styles.modalChipTexto, filtroBaixoGordura && styles.modalChipTextoAtivo]}>
+                    Baixo em gordura
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            {/* Botão aplicar */}
+            <TouchableOpacity style={styles.modalBotaoAplicar} onPress={aplicarFiltrosModal}>
+              <Text style={styles.modalBotaoAplicarTexto}>Aplicar filtros</Text>
+            </TouchableOpacity>
+
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -415,4 +656,71 @@ const styles = StyleSheet.create({
 
   // Sem resultados
   semResultados: { textAlign: 'center', color: '#999', marginTop: 32, fontSize: 15 },
+
+  // Modal de filtros
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalConteudo: {
+    backgroundColor: cores.bege,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
+    maxHeight: '80%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CCC',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitulo: { fontSize: 20, fontWeight: 'bold', color: '#222' },
+  modalLimpar: { fontSize: 14, color: cores.laranja, fontWeight: '600' },
+  modalSecaoTitulo: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#444',
+    marginTop: 12,
+    marginBottom: 10,
+  },
+  modalChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  modalChip: {
+    backgroundColor: cores.branco,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    elevation: 1,
+  },
+  modalChipAtivo: { backgroundColor: cores.laranja },
+  modalChipTexto: { color: '#666', fontSize: 13, fontWeight: '600' },
+  modalChipTextoAtivo: { color: cores.branco },
+  modalBotaoAplicar: {
+    backgroundColor: cores.verde,
+    borderRadius: 30,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 20,
+    elevation: 2,
+  },
+  modalBotaoAplicarTexto: {
+    color: cores.branco,
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
 });
