@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Image,
@@ -11,18 +10,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { RootStackParamList } from '../../App';
+import AnimatedInput from '../animacoes/AnimatedInput';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
-  bege: '#F5F0E1',
+  bege: '#FFF1CE',
   branco: '#FFFFFF',
   cinzaTexto: '#333',
 };
@@ -32,26 +34,101 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
+
+  // ── Stagger de entrada ────────────────────────────
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const formAnim = useRef(new Animated.Value(0)).current;
+  const bottomAnim = useRef(new Animated.Value(0)).current;
+  const logoY = logoAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
+  const formY = formAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
+  const bottomY = bottomAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
+
+  useEffect(() => {
+    Animated.stagger(130, [
+      Animated.timing(logoAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(formAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.timing(bottomAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  // ── Fade-out antes de navegar ─────────────────────
+  const screenOpacity = useRef(new Animated.Value(1)).current;
+  function navigateWithFade(screen: keyof RootStackParamList) {
+    Animated.timing(screenOpacity, { toValue: 0, duration: 200, useNativeDriver: true })
+      .start(() => { screenOpacity.setValue(1); navigation.navigate(screen as any); });
+  }
+
+  // ── Press feedback ────────────────────────────────
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  function onPressIn() { Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 4 }).start(); }
+  function onPressOut() { Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start(); }
 
   async function handleLogin() {
-    if (!email || !password) {
-      Alert.alert('Campos em falta', 'Preenche o email e a palavra-passe.');
+    const emailNormalizado = email.trim().toLowerCase();
+
+    let hasError = false;
+    if (!emailNormalizado) { setEmailError(false); requestAnimationFrame(() => setEmailError(true)); hasError = true; }
+    if (!password) { setPasswordError(false); requestAnimationFrame(() => setPasswordError(true)); hasError = true; }
+    if (hasError) return;
+
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailNormalizado,
+      password,
+    });
+    setLoading(false);
+
+    if (error) {
+      // Uniformizar resposta para evitar enumeração de contas.
+      const msg = /Invalid login credentials/i.test(error.message)
+        ? 'Email ou palavra-passe incorretos.'
+        : /Email not confirmed/i.test(error.message)
+        ? 'Confirma o teu email antes de iniciares sessão.'
+        : error.message;
+      Alert.alert('Erro ao entrar', msg);
       return;
     }
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) Alert.alert('Erro ao entrar', error.message);
+    // Sucesso → onAuthStateChange dispara em App.tsx e o stack troca para Tabs automaticamente.
+  }
+
+  async function handleResetPassword() {
+    const emailNormalizado = email.trim().toLowerCase();
+    if (!emailNormalizado || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
+      setEmailError(false);
+      requestAnimationFrame(() => setEmailError(true));
+      Alert.alert('Email em falta', 'Introduz o teu email no campo acima primeiro.');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(emailNormalizado);
+    if (error) {
+      Alert.alert('Erro', error.message);
+      return;
+    }
+    Alert.alert(
+      'Email enviado',
+      'Verifica a tua caixa de correio e segue as instruções para redefinir a palavra-passe.'
+    );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={{ flex: 1, opacity: screenOpacity, backgroundColor: cores.bege }}>
       {/* Fundo ilustrado — preenche o ecrã todo */}
       <Image
         source={require('../../assets/fundo_login.png')}
         style={styles.fundo}
         resizeMode="cover"
       />
+
+      {/* Botão voltar */}
+      <TouchableOpacity
+        style={styles.botaoVoltar}
+        onPress={() => navigation.goBack()}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons name="chevron-back" size={28} color={cores.cinzaTexto} />
+      </TouchableOpacity>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -61,73 +138,79 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo central por cima do fundo */}
-          <View style={styles.logoContainer}>
+          {/* Grupo 1 — Logo */}
+          <Animated.View style={[styles.logoContainer, { opacity: logoAnim, transform: [{ translateY: logoY }] }]}>
             <Image
               source={require('../../assets/logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />
-          </View>
+          </Animated.View>
 
-          {/* Formulário */}
-          <View style={styles.form}>
-            <Text style={styles.label}>E-mail</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="joao@gmail.com"
-              placeholderTextColor="#BBB"
+          {/* Grupo 2 — Campos */}
+          <Animated.View style={[styles.form, { opacity: formAnim, transform: [{ translateY: formY }] }]}>
+            <AnimatedInput
+              label="E-mail"
+              value={email}
+              onChangeText={(t: string) => { setEmail(t); setEmailError(false); }}
+              error={emailError}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              value={email}
-              onChangeText={setEmail}
+              autoComplete="email"
+              textContentType="emailAddress"
+              returnKeyType="next"
             />
-
-            <Text style={styles.label}>Palavra-passe</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="........"
-              placeholderTextColor="#BBB"
-              secureTextEntry
+            <AnimatedInput
+              label="Palavra-passe"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(t: string) => { setPassword(t); setPasswordError(false); }}
+              error={passwordError}
+              secureTextEntry
+              autoComplete="password"
+              textContentType="password"
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
             />
 
-            <TouchableOpacity onPress={() => { /* TODO: recuperar password */ }}>
+            <TouchableOpacity onPress={handleResetPassword}>
               <Text style={styles.esqueceu}>Esqueceu-se da palavra-passe?</Text>
             </TouchableOpacity>
+          </Animated.View>
 
-            <TouchableOpacity
-              style={[styles.botaoEntrar, loading && { opacity: 0.7 }]}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={cores.branco} />
-              ) : (
-                <Text style={styles.botaoEntrarTexto}>Entrar</Text>
-              )}
-            </TouchableOpacity>
+          {/* Grupo 3 — Botão + link */}
+          <Animated.View style={[styles.bottomActions, { opacity: bottomAnim, transform: [{ translateY: bottomY }] }]}>
+            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+              <TouchableOpacity
+                style={[styles.botaoEntrar, loading && { opacity: 0.7 }]}
+                onPress={handleLogin}
+                onPressIn={onPressIn}
+                onPressOut={onPressOut}
+                disabled={loading}
+                activeOpacity={1}
+              >
+                {loading ? (
+                  <ActivityIndicator color={cores.branco} />
+                ) : (
+                  <Text style={styles.botaoEntrarTexto}>Entrar</Text>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
 
             <View style={styles.registoLinha}>
               <Text style={styles.registoTexto}>Não tens conta? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Registo')}>
+              <TouchableOpacity onPress={() => navigateWithFade('Registo')}>
                 <Text style={styles.registoLink}>Regista-te</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: cores.bege,
-  },
   fundo: {
     position: 'absolute',
     top: 0,
@@ -136,6 +219,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
+  },
+  botaoVoltar: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    zIndex: 10,
+    padding: 4,
   },
   scroll: {
     flexGrow: 1,
@@ -156,27 +246,13 @@ const styles = StyleSheet.create({
 
   // Formulário
   form: { width: '100%' },
-  label: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: cores.cinzaTexto,
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    backgroundColor: cores.branco,
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    fontSize: 14,
-    color: cores.cinzaTexto,
-    elevation: 1,
-  },
+  bottomActions: { width: '100%', marginTop: 8 },
   esqueceu: {
     color: cores.laranja,
     fontSize: 13,
     fontWeight: '600',
-    marginTop: 10,
+    marginTop: 12,
+    marginBottom: 4,
   },
 
   // Botão

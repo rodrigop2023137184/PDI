@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -30,7 +31,7 @@ const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
   branco: '#FFFFFF',
-  bege: '#F5F0E1',
+  bege: '#FFF1CE',
 };
 
 const { width } = Dimensions.get('window');
@@ -43,10 +44,66 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [abaAtiva, setAbaAtiva] = useState<'ingredientes' | 'instrucoes'>('ingredientes');
   const [favorito, setFavorito] = useState(false);
+  const [favoritoLoading, setFavoritoLoading] = useState(false);
 
   useEffect(() => {
     carregarReceita();
+    verificarFavorito();
   }, []);
+
+  async function verificarFavorito() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setFavorito(false);
+      return;
+    }
+    const { data } = await supabase
+      .from('user_favoritos')
+      .select('receitas_id')
+      .eq('user_id', user.id)
+      .eq('receitas_id', receitaId)
+      .maybeSingle();
+    setFavorito(!!data);
+  }
+
+  async function toggleFavorito() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      Alert.alert(
+        'Inicia sessão',
+        'Tens de iniciar sessão para guardar receitas favoritas.'
+      );
+      return;
+    }
+    if (favoritoLoading) return;
+
+    setFavoritoLoading(true);
+    const novoEstado = !favorito;
+    setFavorito(novoEstado);
+
+    if (novoEstado) {
+      const { error } = await supabase
+        .from('user_favoritos')
+        .insert({ user_id: user.id, receitas_id: receitaId });
+      if (error && !/duplicate key|already exists/i.test(error.message)) {
+        setFavorito(false);
+        Alert.alert('Erro', 'Não foi possível adicionar aos favoritos.');
+        console.warn('Erro ao adicionar favorito:', error.message);
+      }
+    } else {
+      const { error } = await supabase
+        .from('user_favoritos')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('receitas_id', receitaId);
+      if (error) {
+        setFavorito(true);
+        Alert.alert('Erro', 'Não foi possível remover dos favoritos.');
+        console.warn('Erro ao remover favorito:', error.message);
+      }
+    }
+    setFavoritoLoading(false);
+  }
 
   async function carregarReceita() {
     try {
@@ -122,7 +179,8 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
           {/* Botão favorito */}
           <TouchableOpacity
             style={styles.botaoFavorito}
-            onPress={() => setFavorito(!favorito)}
+            onPress={toggleFavorito}
+            disabled={favoritoLoading}
           >
             <Ionicons
               name={favorito ? 'heart' : 'heart-outline'}
@@ -218,7 +276,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
                   .sort((a, b) => a.step - b.step)
                   .map((inst) => (
                     <View key={inst.step} style={styles.instrucaoCard}>
-                      <Text style={styles.instrucaoPassoTitulo}>Step {inst.step}</Text>
+                      <Text style={styles.instrucaoPassoTitulo}>{inst.step}º Passo</Text>
                       <Text style={styles.instrucaoTexto}>{inst.text}</Text>
                     </View>
                   ))

@@ -108,18 +108,23 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator
-        screenOptions={{ headerShown: false }}
-        initialRouteName={session ? 'Tabs' : 'Inicial'}
-      >
-        {/* Ecrã inicial (onboarding) — mostrado quando o utilizador não tem sessão */}
-        <Stack.Screen name="Inicial" component={InicialScreen} />
-        {/* Tabs principais — ProfileScreen mostra o estado anónimo quando não há sessão */}
-        <Stack.Screen name="Tabs" component={TabNavigator} />
-        <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
-        {/* Ecrãs de auth */}
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Registo" component={RegistoScreen} />
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {session ? (
+          // Utilizador autenticado — só vê Tabs e detalhe de receita
+          <>
+            <Stack.Screen name="Tabs" component={TabNavigator} />
+            <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
+          </>
+        ) : (
+          // Sem sessão — onboarding + auth, com Tabs disponível para modo "convidado"
+          <>
+            <Stack.Screen name="Inicial" component={InicialScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Registo" component={RegistoScreen} />
+            <Stack.Screen name="Tabs" component={TabNavigator} />
+            <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
