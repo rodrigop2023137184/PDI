@@ -33,7 +33,7 @@ const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
   branco: '#FFFFFF',
-  bege: '#FFF1CE',
+  bege: '#F5F0E1',
 };
 
 const filtros = [
@@ -78,7 +78,6 @@ export default function HomeScreen({ navigation }: Props) {
   const [filtroDietaModal, setFiltroDietaModal] = useState<string | null>(null);
   const [filtroAltoProteina, setFiltroAltoProteina] = useState(false);
   const [filtroBaixoGordura, setFiltroBaixoGordura] = useState(false);
-  const [nomeUtilizador, setNomeUtilizador] = useState<string>('Convidado');
 
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -281,32 +280,6 @@ export default function HomeScreen({ navigation }: Props) {
     carregarReceitas();
   }, []);
 
-  useEffect(() => {
-    async function carregarNomeUtilizador() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setNomeUtilizador('Convidado');
-        return;
-      }
-      const { data: perfil } = await supabase
-        .from('users')
-        .select('display_name')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      const nome = perfil?.display_name?.trim();
-      setNomeUtilizador(nome && nome.length > 0 ? nome : 'Utilizador');
-    }
-
-    carregarNomeUtilizador();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      carregarNomeUtilizador();
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   function getIconeSaudacao() {
     const hora = new Date().getHours();
     let iconName: React.ComponentProps<typeof Ionicons>['name'];
@@ -338,7 +311,7 @@ export default function HomeScreen({ navigation }: Props) {
           {getIconeSaudacao()}
           <Text style={styles.saudacao}> {getTextoSaudacao()}</Text>
         </View>
-        <Text style={styles.nomeUtilizador}>{nomeUtilizador}</Text>
+        <Text style={styles.nomeUtilizador}>Miguel</Text>
       </View>
 
       {/* Barra de pesquisa */}

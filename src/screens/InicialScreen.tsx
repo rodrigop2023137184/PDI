@@ -5,14 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// Aproximação à Inter usando fontes do sistema (sem importar):
-// iOS  → San Francisco (default) — geometria e métricas muito próximas da Inter
-// Android → Roboto (sans-serif) — neutra e legível, próxima da Inter
-const interLike = Platform.select({ ios: 'System', android: 'sans-serif' });
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
@@ -22,7 +16,7 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
-  bege: '#FFF1CE',
+  bege: '#F5F0E1',
   branco: '#FFFFFF',
   cinzaTexto: '#333',
 };
@@ -103,11 +97,9 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   maisTardeTexto: {
-    fontFamily: interLike,
     color: cores.verde,
     fontSize: 15,
     fontWeight: '700',
-    letterSpacing: -0.2,
   },
 
   // Rodapé
@@ -116,14 +108,12 @@ const styles = StyleSheet.create({
     paddingBottom: 140,
   },
   titulo: {
-    fontFamily: interLike,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: 'bold',
     color: cores.cinzaTexto,
     textAlign: 'center',
     marginBottom: 28,
     lineHeight: 28,
-    letterSpacing: -0.4,
   },
   botaoLogin: {
     backgroundColor: cores.verde,
@@ -137,11 +127,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   botaoLoginTexto: {
-    fontFamily: interLike,
     color: cores.branco,
     fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.3,
+    fontWeight: 'bold',
   },
   botaoCriarConta: {
     alignItems: 'center',
@@ -149,10 +137,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   botaoCriarContaTexto: {
-    fontFamily: interLike,
     color: cores.laranja,
     fontSize: 15,
     fontWeight: '700',
-    letterSpacing: -0.2,
   },
 });

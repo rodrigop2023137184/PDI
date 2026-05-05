@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
@@ -9,19 +10,11 @@ import {
   ScrollView,
   Alert,
   Image,
-  ActivityIndicator,
-  Animated,
 } from 'react-native';
-// Aproximação à Anton usando fontes do sistema (sem importar):
-// iOS  → Impact (sans-serif condensada, muito pesada — quase idêntica à Anton)
-// Android → sans-serif-condensed (com weight 900 dá um look condensed black)
-const antonLike = Platform.select({ ios: 'Impact', android: 'sans-serif-condensed' });
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { RootStackParamList } from '../../App';
-import AnimatedInput from '../animacoes/AnimatedInput';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -29,7 +22,7 @@ const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
   branco: '#FFFFFF',
-  bege: '#FFF1CE',
+  bege: '#F5F0E1',
   cinzaTexto: '#333',
 };
 
@@ -41,187 +34,56 @@ export default function RegistoScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ── Erros por campo (disparam shake) ─────────────
-  const [nameError, setNameError] = useState(false);
-  const [emailError, setEmailError] = useState(false);
-  const [passError, setPassError] = useState(false);
-  const [confirmError, setConfirmError] = useState(false);
-
-  // ── Checkmark de sucesso ──────────────────────────
-  const [showCheckmark, setShowCheckmark] = useState(false);
-  const checkScale = useRef(new Animated.Value(0)).current;
-  const checkOpacity = useRef(new Animated.Value(0)).current;
-
-  // ── Stagger de entrada ────────────────────────────
-  const headerAnim = useRef(new Animated.Value(0)).current;
-  const formAnim = useRef(new Animated.Value(0)).current;
-  const bottomAnim = useRef(new Animated.Value(0)).current;
-
-  const headerY = headerAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
-  const formY = formAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
-  const bottomY = bottomAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
-
-  useEffect(() => {
-    Animated.stagger(130, [
-      Animated.timing(headerAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(formAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.timing(bottomAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  // ── Fade-out antes de navegar ─────────────────────
-  const screenOpacity = useRef(new Animated.Value(1)).current;
-
-  function navigateWithFade(screen: keyof RootStackParamList) {
-    Animated.timing(screenOpacity, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      screenOpacity.setValue(1);
-      navigation.navigate(screen as any);
-    });
-  }
-
-  // ── Checkmark de sucesso ──────────────────────────
-  function showSuccessCheckmark(): Promise<void> {
-    return new Promise((resolve) => {
-      setShowCheckmark(true);
-      checkScale.setValue(0);
-      checkOpacity.setValue(0);
-
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(checkOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-          Animated.spring(checkScale, { toValue: 1, useNativeDriver: true, speed: 14, bounciness: 12 }),
-        ]),
-        Animated.delay(900),
-        Animated.timing(checkOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      ]).start(() => {
-        setShowCheckmark(false);
-        resolve();
-      });
-    });
-  }
-
-  // ── Press feedback no botão ───────────────────────
-  const buttonScale = useRef(new Animated.Value(1)).current;
-  function onPressIn() { Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 4 }).start(); }
-  function onPressOut() { Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start(); }
-
   async function registar() {
-    const nome = displayName.trim();
-    const emailNormalizado = email.trim().toLowerCase();
-
-    // Validação com shake por campo
-    let hasError = false;
-    if (!nome) {
-      setNameError(false);
-      requestAnimationFrame(() => setNameError(true));
-      hasError = true;
-    }
-    if (!emailNormalizado) {
-      setEmailError(false);
-      requestAnimationFrame(() => setEmailError(true));
-      hasError = true;
-    }
-    if (!password) {
-      setPassError(false);
-      requestAnimationFrame(() => setPassError(true));
-      hasError = true;
-    }
-    if (!confirmPassword) {
-      setConfirmError(false);
-      requestAnimationFrame(() => setConfirmError(true));
-      hasError = true;
-    }
-    if (hasError) return;
-
-    if (nome.length < 2) {
-      setNameError(false);
-      requestAnimationFrame(() => setNameError(true));
-      Alert.alert('Nome inválido', 'O nome deve ter pelo menos 2 caracteres.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
-      setEmailError(false);
-      requestAnimationFrame(() => setEmailError(true));
-      Alert.alert('Email inválido', 'Verifica o formato do email.');
+    if (!displayName || !email || !password || !confirmPassword) {
+      Alert.alert('Campos em falta', 'Preenche todos os campos.');
       return;
     }
     if (password !== confirmPassword) {
-      setPassError(false); setConfirmError(false);
-      requestAnimationFrame(() => { setPassError(true); setConfirmError(true); });
       Alert.alert('Palavras-passe diferentes', 'A confirmação não corresponde.');
       return;
     }
     if (password.length < 6) {
-      setPassError(false);
-      requestAnimationFrame(() => setPassError(true));
       Alert.alert('Palavra-passe fraca', 'A palavra-passe tem de ter pelo menos 6 caracteres.');
       return;
     }
 
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
-      email: emailNormalizado,
+      email,
       password,
-      options: { data: { display_name: nome } },
+      options: { data: { display_name: displayName } },
     });
 
     if (error) {
       setLoading(false);
-      const msg = /already registered|already exists/i.test(error.message)
-        ? 'Já existe uma conta com este email.'
-        : /email rate limit exceeded/i.test(error.message)
-        ? 'Demasiados pedidos de registo. Tenta novamente dentro de uma hora.'
-        : error.message;
-      Alert.alert('Erro ao registar', msg);
+      Alert.alert('Erro ao registar', error.message);
       return;
     }
 
-    // Se o utilizador foi criado E há sessão imediata (email confirmation off),
-    // tentamos garantir o perfil em public.users.
-    if (data.user && data.session) {
+    if (data.user) {
       const { error: erroInsert } = await supabase.from('users').insert({
         id: data.user.id,
-        display_name: nome,
+        display_name: displayName,
       });
-      if (erroInsert && !/duplicate key|already exists/i.test(erroInsert.message)) {
+      if (erroInsert) {
         console.warn('Falha ao criar perfil public.users:', erroInsert.message);
       }
-      setLoading(false);
-      await showSuccessCheckmark();
-      return;
     }
 
-    // Sem sessão imediata → email confirmation está ativa.
     setLoading(false);
-    await showSuccessCheckmark();
-    Alert.alert(
-      'Confirma o teu email',
-      'Enviámos-te um link de confirmação. Confirma o email antes de iniciar sessão.',
-      [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-    );
+    Alert.alert('Conta criada', 'Confirma o email (se aplicável) e inicia sessão.');
+    navigation.navigate('Login');
   }
 
   return (
-    <Animated.View style={{ flex: 1, opacity: screenOpacity, backgroundColor: cores.bege }}>
+    <View style={styles.container}>
       {/* Fundo ilustrado — preenche o ecrã todo */}
       <Image
         source={require('../../assets/fundo_registo.png')}
         style={styles.fundo}
         resizeMode="cover"
       />
-
-      {/* Botão voltar */}
-      <TouchableOpacity
-        style={styles.botaoVoltar}
-        onPress={() => navigation.goBack()}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons name="chevron-back" size={28} color={cores.cinzaTexto} />
-      </TouchableOpacity>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -231,105 +93,80 @@ export default function RegistoScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Grupo 1 — Cabeçalho */}
-          <Animated.View style={[styles.cabecalho, { opacity: headerAnim, transform: [{ translateY: headerY }] }]}>
+          {/* Cabeçalho */}
+          <View style={styles.cabecalho}>
             <Text style={styles.wordmark}>KomiKalate</Text>
             <Text style={styles.titulo}>Regista-te</Text>
-          </Animated.View>
+          </View>
 
-          {/* Grupo 2 — Campos */}
-          <Animated.View style={[styles.form, { opacity: formAnim, transform: [{ translateY: formY }] }]}>
-            <AnimatedInput
-              label="Nome de Utilizador"
+          {/* Formulário */}
+          <View style={styles.form}>
+            <Text style={styles.label}>Nome de Utilizador</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="João Texeira"
+              placeholderTextColor="#BBB"
               value={displayName}
-              onChangeText={(t: string) => { setDisplayName(t); setNameError(false); }}
-              error={nameError}
-              autoCapitalize="words"
-              autoComplete="name"
-              textContentType="name"
-              returnKeyType="next"
+              onChangeText={setDisplayName}
             />
 
-            <AnimatedInput
-              label="E-mail"
-              value={email}
-              onChangeText={(t: string) => { setEmail(t); setEmailError(false); }}
-              error={emailError}
-              keyboardType="email-address"
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="joao@gmail.com"
+              placeholderTextColor="#BBB"
               autoCapitalize="none"
+              keyboardType="email-address"
               autoCorrect={false}
-              autoComplete="email"
-              textContentType="emailAddress"
-              returnKeyType="next"
+              value={email}
+              onChangeText={setEmail}
             />
 
-            <AnimatedInput
-              label="Palavra-passe"
+            <Text style={styles.label}>Palavra-passe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="........"
+              placeholderTextColor="#BBB"
+              secureTextEntry
               value={password}
-              onChangeText={(t: string) => { setPassword(t); setPassError(false); }}
-              error={passError}
-              secureTextEntry
-              autoComplete="new-password"
-              textContentType="newPassword"
-              returnKeyType="next"
+              onChangeText={setPassword}
             />
 
-            <AnimatedInput
-              label="Confirma a Palavra-passe"
+            <Text style={styles.label}>Confirma a Palavra-passe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="........"
+              placeholderTextColor="#BBB"
+              secureTextEntry
               value={confirmPassword}
-              onChangeText={(t: string) => { setConfirmPassword(t); setConfirmError(false); }}
-              error={confirmError}
-              secureTextEntry
-              autoComplete="new-password"
-              textContentType="newPassword"
-              returnKeyType="done"
-              onSubmitEditing={registar}
+              onChangeText={setConfirmPassword}
             />
-          </Animated.View>
 
-          {/* Grupo 3 — Botão + link */}
-          <Animated.View style={[styles.bottomActions, { opacity: bottomAnim, transform: [{ translateY: bottomY }] }]}>
-            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-              <TouchableOpacity
-                style={[styles.botaoRegistar, loading && { opacity: 0.7 }]}
-                onPress={registar}
-                onPressIn={onPressIn}
-                onPressOut={onPressOut}
-                disabled={loading}
-                activeOpacity={1}
-              >
-                {loading ? (
-                  <ActivityIndicator color={cores.branco} />
-                ) : (
-                  <Text style={styles.botaoRegistarTexto}>Registar</Text>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
-
-            <View style={styles.loginLinha}>
-              <Text style={styles.loginTexto}>Já tens conta? </Text>
-              <TouchableOpacity onPress={() => navigateWithFade('Login')}>
-                <Text style={styles.loginLink}>Inicia sessão</Text>
-              </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.botaoRegistar, loading && { opacity: 0.7 }]}
+              onPress={registar}
+              disabled={loading}
+            >
+              <Text style={styles.botaoRegistarTexto}>
+                {loading ? 'A criar conta...' : 'Registar'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.loginLinha}>
+                        <Text style={styles.loginTexto}>Já tens conta? </Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                          <Text style={styles.loginLink}>Inicia sessão</Text>
+                        </TouchableOpacity>
             </View>
-          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Overlay do checkmark de sucesso */}
-      {showCheckmark && (
-        <View style={styles.checkmarkOverlay} pointerEvents="none">
-          <Animated.View style={[styles.checkmarkContainer, { opacity: checkOpacity, transform: [{ scale: checkScale }] }]}>
-            <Ionicons name="checkmark-circle" size={96} color={cores.verde} />
-            <Text style={styles.checkmarkTexto}>Conta criada!</Text>
-          </Animated.View>
-        </View>
-      )}
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: cores.bege },
+
   fundo: {
     position: 'absolute',
     top: 0,
@@ -338,13 +175,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
-  },
-  botaoVoltar: {
-    position: 'absolute',
-    top: 50,
-    left: 16,
-    zIndex: 10,
-    padding: 4,
   },
 
   scroll: {
@@ -359,13 +189,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   wordmark: {
-    fontFamily: antonLike,
-    fontSize: 42,
-    fontWeight: '900',
+    fontSize: 34,
+    fontWeight: 'bold',
+    fontStyle: 'italic',
     color: cores.laranja,
     marginBottom: 4,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
   },
   titulo: {
     fontSize: 28,
@@ -375,7 +203,29 @@ const styles = StyleSheet.create({
 
   // Formulário
   form: { width: '100%' },
-  bottomActions: { width: '100%' },
+  label: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: cores.cinzaTexto,
+    marginBottom: 8,
+    marginTop: 20,
+  },
+  input: {
+    backgroundColor: cores.branco,
+    borderRadius: 25,
+    paddingHorizontal: 22,
+    paddingVertical: 20,
+    fontSize: 16,
+    color: cores.cinzaTexto,
+    elevation: 1,
+  },
+
+  entrarLink: {
+    color: cores.laranja,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 10,
+  },
 
   // Botão
   botaoRegistar: {
@@ -383,7 +233,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 28,
+    marginTop: 24,
     elevation: 2,
   },
   botaoRegistarTexto: {
@@ -391,22 +241,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  loginLinha: {
+loginLinha: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 18,
   },
   loginTexto: { color: cores.cinzaTexto, fontSize: 14 },
   loginLink: { color: cores.verde, fontSize: 14, fontWeight: 'bold' },
-
-  // Checkmark overlay
-  checkmarkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(245, 240, 225, 0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
-  },
-  checkmarkContainer: { alignItems: 'center', gap: 12 },
-  checkmarkTexto: { fontSize: 20, fontWeight: '700', color: cores.verde },
 });
