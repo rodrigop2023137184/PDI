@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   Image,
@@ -10,14 +11,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { RootStackParamList } from '../../App';
-import AnimatedInput from '../animacoes/AnimatedInput';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -31,47 +30,18 @@ const cores = {
 
 export default function LoginScreen() {
   const navigation = useNavigation<NavProp>();
+  const passwordRef = useRef<TextInput>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [emailError, setEmailError] = useState(false);
-  const [passwordError, setPasswordError] = useState(false);
-
-  // ── Stagger de entrada ────────────────────────────
-  const logoAnim = useRef(new Animated.Value(0)).current;
-  const formAnim = useRef(new Animated.Value(0)).current;
-  const bottomAnim = useRef(new Animated.Value(0)).current;
-  const logoY = logoAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
-  const formY = formAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
-  const bottomY = bottomAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
-
-  useEffect(() => {
-    Animated.stagger(130, [
-      Animated.timing(logoAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(formAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.timing(bottomAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  // ── Fade-out antes de navegar ─────────────────────
-  const screenOpacity = useRef(new Animated.Value(1)).current;
-  function navigateWithFade(screen: keyof RootStackParamList) {
-    Animated.timing(screenOpacity, { toValue: 0, duration: 200, useNativeDriver: true })
-      .start(() => { screenOpacity.setValue(1); navigation.navigate(screen as any); });
-  }
-
-  // ── Press feedback ────────────────────────────────
-  const buttonScale = useRef(new Animated.Value(1)).current;
-  function onPressIn() { Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 4 }).start(); }
-  function onPressOut() { Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start(); }
 
   async function handleLogin() {
     const emailNormalizado = email.trim().toLowerCase();
 
-    let hasError = false;
-    if (!emailNormalizado) { setEmailError(false); requestAnimationFrame(() => setEmailError(true)); hasError = true; }
-    if (!password) { setPasswordError(false); requestAnimationFrame(() => setPasswordError(true)); hasError = true; }
-    if (hasError) return;
+    if (!emailNormalizado || !password) {
+      Alert.alert('Campos em falta', 'Preenche o email e a palavra-passe.');
+      return;
+    }
 
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({
@@ -96,8 +66,6 @@ export default function LoginScreen() {
   async function handleResetPassword() {
     const emailNormalizado = email.trim().toLowerCase();
     if (!emailNormalizado || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
-      setEmailError(false);
-      requestAnimationFrame(() => setEmailError(true));
       Alert.alert('Email em falta', 'Introduz o teu email no campo acima primeiro.');
       return;
     }
@@ -113,7 +81,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <Animated.View style={{ flex: 1, opacity: screenOpacity, backgroundColor: cores.bege }}>
+    <View style={styles.container}>
       {/* Fundo ilustrado — preenche o ecrã todo */}
       <Image
         source={require('../../assets/fundo_login.png')}
@@ -138,79 +106,82 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Grupo 1 — Logo */}
-          <Animated.View style={[styles.logoContainer, { opacity: logoAnim, transform: [{ translateY: logoY }] }]}>
+          {/* Logo central por cima do fundo */}
+          <View style={styles.logoContainer}>
             <Image
               source={require('../../assets/logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />
-          </Animated.View>
+          </View>
 
-          {/* Grupo 2 — Campos */}
-          <Animated.View style={[styles.form, { opacity: formAnim, transform: [{ translateY: formY }] }]}>
-            <AnimatedInput
-              label="E-mail"
-              value={email}
-              onChangeText={(t: string) => { setEmail(t); setEmailError(false); }}
-              error={emailError}
+          {/* Formulário */}
+          <View style={styles.form}>
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="joao@gmail.com"
+              placeholderTextColor="#BBB"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="email"
               textContentType="emailAddress"
               returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              value={email}
+              onChangeText={setEmail}
             />
-            <AnimatedInput
-              label="Palavra-passe"
-              value={password}
-              onChangeText={(t: string) => { setPassword(t); setPasswordError(false); }}
-              error={passwordError}
+
+            <Text style={styles.label}>Palavra-passe</Text>
+            <TextInput
+              ref={passwordRef}
+              style={styles.input}
+              placeholder="........"
+              placeholderTextColor="#BBB"
               secureTextEntry
               autoComplete="password"
               textContentType="password"
               returnKeyType="done"
               onSubmitEditing={handleLogin}
+              value={password}
+              onChangeText={setPassword}
             />
 
             <TouchableOpacity onPress={handleResetPassword}>
               <Text style={styles.esqueceu}>Esqueceu-se da palavra-passe?</Text>
             </TouchableOpacity>
-          </Animated.View>
 
-          {/* Grupo 3 — Botão + link */}
-          <Animated.View style={[styles.bottomActions, { opacity: bottomAnim, transform: [{ translateY: bottomY }] }]}>
-            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-              <TouchableOpacity
-                style={[styles.botaoEntrar, loading && { opacity: 0.7 }]}
-                onPress={handleLogin}
-                onPressIn={onPressIn}
-                onPressOut={onPressOut}
-                disabled={loading}
-                activeOpacity={1}
-              >
-                {loading ? (
-                  <ActivityIndicator color={cores.branco} />
-                ) : (
-                  <Text style={styles.botaoEntrarTexto}>Entrar</Text>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity
+              style={[styles.botaoEntrar, loading && { opacity: 0.7 }]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={cores.branco} />
+              ) : (
+                <Text style={styles.botaoEntrarTexto}>Entrar</Text>
+              )}
+            </TouchableOpacity>
 
             <View style={styles.registoLinha}>
               <Text style={styles.registoTexto}>Não tens conta? </Text>
-              <TouchableOpacity onPress={() => navigateWithFade('Registo')}>
+              <TouchableOpacity onPress={() => navigation.navigate('Registo')}>
                 <Text style={styles.registoLink}>Regista-te</Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: cores.bege,
+  },
   fundo: {
     position: 'absolute',
     top: 0,
@@ -246,13 +217,27 @@ const styles = StyleSheet.create({
 
   // Formulário
   form: { width: '100%' },
-  bottomActions: { width: '100%', marginTop: 8 },
+  label: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: cores.cinzaTexto,
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  input: {
+    backgroundColor: cores.branco,
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    fontSize: 14,
+    color: cores.cinzaTexto,
+    elevation: 1,
+  },
   esqueceu: {
     color: cores.laranja,
     fontSize: 13,
     fontWeight: '600',
-    marginTop: 12,
-    marginBottom: 4,
+    marginTop: 10,
   },
 
   // Botão

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Receita } from '../../types';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 
@@ -22,7 +22,7 @@ const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
   branco: '#FFFFFF',
-  bege: '#F5F0E1',
+  bege: '#FFF1CE',
 };
 
 export default function ProfileScreen() {
@@ -33,8 +33,18 @@ export default function ProfileScreen() {
   const [logado, setLogado] = useState(false);
 
   useEffect(() => {
-    carregarPerfil();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      carregarPerfil();
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      carregarPerfil();
+    }, [])
+  );
 
   async function carregarPerfil() {
     setLoading(true);
@@ -43,24 +53,23 @@ export default function ProfileScreen() {
 
       if (!user) {
         setLogado(false);
+        setNomeUtilizador(null);
+        setFavoritos([]);
         setLoading(false);
         return;
       }
 
       setLogado(true);
 
-      // Nunca usar user.email?.split('@')[0] como fallback — esse era o
-      // comportamento anterior que mostrava "joao.silva" em vez do nome real.
       const { data: perfil } = await supabase
         .from('users')
         .select('display_name')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (perfil?.display_name && perfil.display_name.trim() !== '') {
         setNomeUtilizador(perfil.display_name);
       } else {
-        // Fallback neutro — nunca derivado do email
         setNomeUtilizador('Utilizador');
       }
 
@@ -74,11 +83,33 @@ export default function ProfileScreen() {
           .map((f: any) => f.receita)
           .filter(Boolean) as Receita[];
         setFavoritos(receitasFav);
+      } else {
+        setFavoritos([]);
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function removerFavorito(receitaId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const favoritosAnteriores = favoritos;
+    setFavoritos((prev) => prev.filter((r) => r.id !== receitaId));
+
+    const { error } = await supabase
+      .from('user_favoritos')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('receitas_id', receitaId);
+
+    if (error) {
+      setFavoritos(favoritosAnteriores);
+      Alert.alert('Erro', 'Não foi possível remover dos favoritos.');
+      console.warn('Erro ao remover favorito:', error.message);
     }
   }
 
@@ -154,9 +185,13 @@ export default function ProfileScreen() {
               onPress={() => navigation.navigate('DetalheReceita', { receitaId: receita.id })}
             >
               <Image source={{ uri: receita.imagem_url ?? undefined }} style={styles.imagemFav} />
-              <View style={styles.iconeFav}>
+              <TouchableOpacity
+                style={styles.iconeFav}
+                onPress={() => removerFavorito(receita.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons name="heart" size={18} color={cores.verde} />
-              </View>
+              </TouchableOpacity>
               <Text style={styles.nomeReceita} numberOfLines={2}>{receita.nome}</Text>
             </TouchableOpacity>
           ))}
