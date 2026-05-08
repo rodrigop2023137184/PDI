@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import BarraPesq from '../../componentes/BarraPesq';
 import {
   View,
@@ -329,8 +329,45 @@ export default function HomeScreen({ navigation }: Props) {
       ? `Resultados para "${pesquisa}"`
       : 'Recomendações do Chefe';
 
+  // Animação stagger: cada card faz fade-in + slide-up quando os dados mudam
+  const animacoesItens = useMemo(
+    () => dadosParaMostrar.map(() => new Animated.Value(0)),
+    [dadosParaMostrar]
+  );
+
+  useEffect(() => {
+    if (animacoesItens.length === 0) return;
+    Animated.stagger(
+      70,
+      animacoesItens.map((anim) =>
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 380,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  }, [animacoesItens]);
+
   return (
     <View style={styles.container}>
+      {/* Decoração de fundo — linhas verdes subtis */}
+      <Image
+        source={require('../../assets/linha_verde1.png')}
+        style={styles.linhaDecoTopo}
+        resizeMode="contain"
+      />
+      <Image
+        source={require('../../assets/linha_verde2.png')}
+        style={styles.linhaDecoMeio}
+        resizeMode="contain"
+      />
+      <Image
+        source={require('../../assets/linha_verde3.png')}
+        style={styles.linhaDecoBaixo}
+        resizeMode="contain"
+      />
 
       {/* Saudação */}
       <View style={styles.saudacaoContainer}>
@@ -416,7 +453,7 @@ export default function HomeScreen({ navigation }: Props) {
         <View style={styles.secaoHeader}>
           <Text style={styles.titulo}>{tituloSecao}</Text>
           {resultados.length === 0 && (
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('TodasReceitas')}>
               <Text style={styles.verMais}>Ver mais</Text>
             </TouchableOpacity>
           )}
@@ -427,35 +464,45 @@ export default function HomeScreen({ navigation }: Props) {
         ) : dadosParaMostrar.length === 0 ? (
           <Text style={styles.semResultados}>Nenhuma receita encontrada.</Text>
         ) : (
-          dadosParaMostrar.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.card}
-              onPress={() => navigation.navigate('DetalheReceita', { receitaId: item.id })}
-            >
-              {/* Imagem à esquerda */}
-              <Image
-                source={{ uri: item.imagem_url ?? undefined }}
-                style={styles.imagem}
-              />
+          dadosParaMostrar.map((item, index) => {
+            const anim = animacoesItens[index];
+            const translateYItem = anim
+              ? anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] })
+              : 0;
+            return (
+              <Animated.View
+                key={item.id}
+                style={{ opacity: anim ?? 1, transform: [{ translateY: translateYItem }] }}
+              >
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={() => navigation.navigate('DetalheReceita', { receitaId: item.id })}
+                >
+                  {/* Imagem à esquerda */}
+                  <Image
+                    source={{ uri: item.imagem_url ?? undefined }}
+                    style={styles.imagem}
+                  />
 
-              {/* Texto ao centro */}
-              <View style={styles.cardInfo}>
-                <Text style={styles.nomeReceita} numberOfLines={2}>
-                  {item.nome}
-                </Text>
-                <View style={styles.tempoContainer}>
-                  <Ionicons name="time-outline" size={14} color="#5e5e5e" />
-                  <Text style={styles.tempo}> {item.prep_tempo_min} Min</Text>
-                </View>
-              </View>
+                  {/* Texto ao centro */}
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.nomeReceita} numberOfLines={2}>
+                      {item.nome}
+                    </Text>
+                    <View style={styles.tempoContainer}>
+                      <Ionicons name="time-outline" size={14} color="#5e5e5e" />
+                      <Text style={styles.tempo}> {item.prep_tempo_min} Min</Text>
+                    </View>
+                  </View>
 
-              {/* Botão seta à direita */}
-              <View style={styles.botaoSeta}>
-                <Ionicons name="arrow-forward" size={18} color={cores.branco} />
-              </View>
-            </TouchableOpacity>
-          ))
+                  {/* Botão seta à direita */}
+                  <View style={styles.botaoSeta}>
+                    <Ionicons name="arrow-forward" size={18} color={cores.branco} />
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })
         )}
       </ScrollView>
 
@@ -585,7 +632,7 @@ const styles = StyleSheet.create({
   scrollConteudo: { flexGrow: 1, paddingBottom: 80 },
 
   // Saudação
-  saudacaoContainer: { marginBottom: 16 },
+  saudacaoContainer: { marginTop: 24, marginBottom: 16 },
   saudacaoLinha: { flexDirection: 'row', alignItems: 'center' },
   saudacao: { fontSize: 16, color: '#888' },
   nomeUtilizador: { fontSize: 26, fontWeight: 'bold', color: '#222' },
@@ -683,6 +730,35 @@ const styles = StyleSheet.create({
 
   // Sem resultados
   semResultados: { textAlign: 'center', color: '#999', marginTop: 32, fontSize: 15 },
+
+  // Decoração de fundo — linhas verdes subtis (não interceptam toques)
+  linhaDecoTopo: {
+    position: 'absolute',
+    top: 70,
+    left: -90,
+    width: 380,
+    height: 380,
+    opacity: 0.18,
+    pointerEvents: 'none',
+  },
+  linhaDecoMeio: {
+    position: 'absolute',
+    top: '32%',
+    right: -120,
+    width: 460,
+    height: 360,
+    opacity: 0.15,
+    pointerEvents: 'none',
+  },
+  linhaDecoBaixo: {
+    position: 'absolute',
+    bottom: 50,
+    left: 10,
+    width: 180,
+    height: 180,
+    opacity: 0.22,
+    pointerEvents: 'none',
+  },
 
   // Modal de filtros
   modalBackdrop: {

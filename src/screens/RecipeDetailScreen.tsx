@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -45,6 +47,24 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
   const [abaAtiva, setAbaAtiva] = useState<'ingredientes' | 'instrucoes'>('ingredientes');
   const [favorito, setFavorito] = useState(false);
   const [favoritoLoading, setFavoritoLoading] = useState(false);
+
+  // Indicador laranja deslizante das abas
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [larguraInternaAbas, setLarguraInternaAbas] = useState(0);
+  const larguraIndicador = larguraInternaAbas / 2;
+  const translateX = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, larguraIndicador],
+  });
+
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: abaAtiva === 'ingredientes' ? 0 : 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [abaAtiva]);
 
   useEffect(() => {
     carregarReceita();
@@ -223,18 +243,29 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
           </View>
 
           {/* Abas Ingredientes / Instruções */}
-          <View style={styles.abasContainer}>
+          <View
+            style={styles.abasContainer}
+            onLayout={(e) => setLarguraInternaAbas(e.nativeEvent.layout.width - 8)}
+          >
+            <Animated.View
+              style={[
+                styles.abaIndicador,
+                { width: larguraIndicador, transform: [{ translateX }] },
+              ]}
+            />
             <TouchableOpacity
-              style={[styles.aba, abaAtiva === 'ingredientes' && styles.abaAtiva]}
+              style={styles.aba}
               onPress={() => setAbaAtiva('ingredientes')}
+              activeOpacity={0.85}
             >
               <Text style={[styles.abaTexto, abaAtiva === 'ingredientes' && styles.abaTextoAtivo]}>
                 Ingredientes
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.aba, abaAtiva === 'instrucoes' && styles.abaAtiva]}
+              style={styles.aba}
               onPress={() => setAbaAtiva('instrucoes')}
+              activeOpacity={0.85}
             >
               <Text style={[styles.abaTexto, abaAtiva === 'instrucoes' && styles.abaTextoAtivo]}>
                 Instruções
@@ -287,12 +318,20 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
           {/* Receitas relacionadas */}
           <View style={styles.relacionadasHeader}>
             <Text style={styles.relacionadasTitulo}>Receitas Relacionadas</Text>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate('ReceitasRelacionadas', {
+                  receitaAtualId: receita.id,
+                  ingredientesAtuais: receita.ingredientes.map((i) => i.ingrediente_id),
+                  receitaAtualNome: receita.nome,
+                })
+              }
+            >
               <Text style={styles.verMaisVerde}>Ver mais</Text>
             </TouchableOpacity>
           </View>
           <ReceitasRelacionadas
-            dietaType={receita.dieta_type}
+            ingredientesAtuais={receita.ingredientes.map((i) => i.ingrediente_id)}
             receitaAtualId={receita.id}
             navigation={navigation}
           />
@@ -304,11 +343,11 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
 
 // ── Subcomponente: Receitas Relacionadas ──────────────
 function ReceitasRelacionadas({
-  dietaType,
+  ingredientesAtuais,
   receitaAtualId,
   navigation,
 }: {
-  dietaType: string | null;
+  ingredientesAtuais: string[];
   receitaAtualId: string;
   navigation: any;
 }) {
@@ -316,19 +355,49 @@ function ReceitasRelacionadas({
 
   useEffect(() => {
     async function carregar() {
-      let query = supabase
+      if (ingredientesAtuais.length === 0) {
+        setRelacionadas([]);
+        return;
+      }
+
+      // Busca todas as outras receitas com os ingredientes (JSONB) para filtrar localmente
+      const { data, error } = await supabase
         .from('receitas')
-        .select('id, nome, imagem_url, prep_tempo_min')
-        .neq('id', receitaAtualId)
-        .limit(5);
+        .select('id, nome, imagem_url, prep_tempo_min, dieta_type, ingredientes')
+        .neq('id', receitaAtualId);
 
-      if (dietaType) query = query.eq('dieta_type', dietaType);
+      if (error || !data) {
+        setRelacionadas([]);
+        return;
+      }
 
-      const { data } = await query;
-      setRelacionadas((data as Receita[]) ?? []);
+      const idsAtuais = new Set(ingredientesAtuais);
+
+      // Filtra as que partilham >= 1 ingrediente e ordena pelo nº de ingredientes em comum
+      const filtradas = (data as (Receita & { ingredientes: ReceitaIngrediente[] })[])
+        .map((r) => {
+          const partilhados = (r.ingredientes ?? []).filter((i) =>
+            idsAtuais.has(i.ingrediente_id)
+          ).length;
+          return { receita: r, partilhados };
+        })
+        .filter((x) => x.partilhados > 0)
+        .sort((a, b) => b.partilhados - a.partilhados)
+        .slice(0, 5)
+        .map((x) => x.receita);
+
+      setRelacionadas(filtradas);
     }
     carregar();
-  }, []);
+  }, [receitaAtualId]);
+
+  if (relacionadas.length === 0) {
+    return (
+      <Text style={{ color: '#888', fontSize: 13, paddingVertical: 8 }}>
+        Sem receitas relacionadas.
+      </Text>
+    );
+  }
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -445,6 +514,15 @@ const styles = StyleSheet.create({
     padding: 4,
     marginBottom: 16,
     elevation: 2,
+    position: 'relative',
+  },
+  abaIndicador: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
+    backgroundColor: cores.laranja,
+    borderRadius: 22,
   },
   aba: {
     flex: 1,
@@ -452,7 +530,6 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
   },
-  abaAtiva: { backgroundColor: cores.laranja },
   abaTexto: { fontSize: 14, fontWeight: '600', color: '#888' },
   abaTextoAtivo: { color: cores.branco },
 

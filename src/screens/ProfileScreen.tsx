@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -92,6 +94,27 @@ export default function ProfileScreen() {
       setLoading(false);
     }
   }
+
+  // Animações stagger dos cards de favoritos: cada novo array gera valores 0→1
+  const animacoesItens = useMemo(
+    () => favoritos.map(() => new Animated.Value(0)),
+    [favoritos]
+  );
+
+  useEffect(() => {
+    if (animacoesItens.length === 0) return;
+    Animated.stagger(
+      70,
+      animacoesItens.map((anim) =>
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 380,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  }, [animacoesItens]);
 
   async function removerFavorito(receitaId: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -178,23 +201,33 @@ export default function ProfileScreen() {
         <Text style={styles.semFavoritos}>Ainda não tens receitas favoritas.</Text>
       ) : (
         <View style={styles.grelha}>
-          {favoritos.map((receita) => (
-            <TouchableOpacity
-              key={receita.id}
-              style={styles.cardFav}
-              onPress={() => navigation.navigate('DetalheReceita', { receitaId: receita.id })}
-            >
-              <Image source={{ uri: receita.imagem_url ?? undefined }} style={styles.imagemFav} />
-              <TouchableOpacity
-                style={styles.iconeFav}
-                onPress={() => removerFavorito(receita.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          {favoritos.map((receita, index) => {
+            const anim = animacoesItens[index];
+            const translateY = anim
+              ? anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] })
+              : 0;
+            return (
+              <Animated.View
+                key={receita.id}
+                style={[styles.cardFavWrapper, { opacity: anim ?? 1, transform: [{ translateY }] }]}
               >
-                <Ionicons name="heart" size={18} color={cores.verde} />
-              </TouchableOpacity>
-              <Text style={styles.nomeReceita} numberOfLines={2}>{receita.nome}</Text>
-            </TouchableOpacity>
-          ))}
+                <TouchableOpacity
+                  style={styles.cardFav}
+                  onPress={() => navigation.navigate('DetalheReceita', { receitaId: receita.id })}
+                >
+                  <Image source={{ uri: receita.imagem_url ?? undefined }} style={styles.imagemFav} />
+                  <TouchableOpacity
+                    style={styles.iconeFav}
+                    onPress={() => removerFavorito(receita.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="heart" size={18} color={cores.verde} />
+                  </TouchableOpacity>
+                  <Text style={styles.nomeReceita} numberOfLines={2}>{receita.nome}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })}
         </View>
       )}
     </ScrollView>
@@ -245,6 +278,7 @@ const styles = StyleSheet.create({
     backgroundColor: cores.branco,
     borderRadius: 16,
     padding: 16,
+    marginTop: 24,
     marginBottom: 24,
     elevation: 2,
   },
@@ -254,13 +288,12 @@ const styles = StyleSheet.create({
   tituloSecao: { fontSize: 22, fontWeight: 'bold', color: '#222', marginBottom: 16 },
   semFavoritos: { textAlign: 'center', color: '#999', marginTop: 32, fontSize: 15 },
   grelha: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  cardFavWrapper: { width: '47%', marginBottom: 4 },
   cardFav: {
-    width: '47%',
     backgroundColor: cores.branco,
     borderRadius: 16,
     overflow: 'hidden',
     elevation: 2,
-    marginBottom: 4,
   },
   imagemFav: { width: '100%', height: 130 },
   iconeFav: {

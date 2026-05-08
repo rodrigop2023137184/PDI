@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -12,6 +12,9 @@ import RecipeDetailScreen from './src/screens/RecipeDetailScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegistoScreen from './src/screens/RegistoScreen';
 import InicialScreen from './src/screens/InicialScreen';
+import RecuperarPasswordScreen from './src/screens/RecuperarPasswordScreen';
+import TodasReceitasScreen from './src/screens/TodasReceitasScreen';
+import ReceitasRelacionadasScreen from './src/screens/ReceitasRelacionadasScreen';
 import { supabase } from './lib/supabase';
 
 // Tipos das rotas para TypeScript
@@ -21,6 +24,13 @@ export type RootStackParamList = {
   DetalheReceita: { receitaId: string };
   Login: undefined;
   Registo: undefined;
+  RecuperarPassword: undefined;
+  TodasReceitas: undefined;
+  ReceitasRelacionadas: {
+    receitaAtualId: string;
+    ingredientesAtuais: string[];
+    receitaAtualNome: string;
+  };
 };
 
 export type TabParamList = {
@@ -84,6 +94,7 @@ function TabNavigator() {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recuperandoPassword, setRecuperandoPassword] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -91,11 +102,32 @@ export default function App() {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecuperandoPassword(true);
+      }
       setSession(session);
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Deep link: troca o ?code=... pela sessão de recovery (Supabase PKCE flow)
+  useEffect(() => {
+    async function tratarLink(url: string | null) {
+      if (!url) return;
+      const match = url.match(/[?&]code=([^&]+)/);
+      if (!match) return;
+      const code = decodeURIComponent(match[1]);
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.warn('exchangeCodeForSession error:', error.message);
+      }
+    }
+
+    Linking.getInitialURL().then(tratarLink);
+    const sub = Linking.addEventListener('url', ({ url }) => tratarLink(url));
+    return () => sub.remove();
   }, []);
 
   if (loading) {
@@ -109,11 +141,18 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {session ? (
+        {recuperandoPassword ? (
+          // Fluxo de recuperação de password — abre via deep link
+          <Stack.Screen name="RecuperarPassword">
+            {() => <RecuperarPasswordScreen onConcluido={() => setRecuperandoPassword(false)} />}
+          </Stack.Screen>
+        ) : session ? (
           // Utilizador autenticado — só vê Tabs e detalhe de receita
           <>
             <Stack.Screen name="Tabs" component={TabNavigator} />
             <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
+            <Stack.Screen name="TodasReceitas" component={TodasReceitasScreen} />
+            <Stack.Screen name="ReceitasRelacionadas" component={ReceitasRelacionadasScreen} />
           </>
         ) : (
           // Sem sessão — onboarding + auth, com Tabs disponível para modo "convidado"
@@ -123,6 +162,8 @@ export default function App() {
             <Stack.Screen name="Registo" component={RegistoScreen} />
             <Stack.Screen name="Tabs" component={TabNavigator} />
             <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
+            <Stack.Screen name="TodasReceitas" component={TodasReceitasScreen} />
+            <Stack.Screen name="ReceitasRelacionadas" component={ReceitasRelacionadasScreen} />
           </>
         )}
       </Stack.Navigator>

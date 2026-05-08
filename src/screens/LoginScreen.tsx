@@ -101,7 +101,9 @@ export default function LoginScreen() {
       Alert.alert('Email em falta', 'Introduz o teu email no campo acima primeiro.');
       return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(emailNormalizado);
+    const { error } = await supabase.auth.resetPasswordForEmail(emailNormalizado, {
+      redirectTo: 'komikalate://reset-password',
+    });
     if (error) {
       Alert.alert('Erro', error.message);
       return;
