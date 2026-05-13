@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Linking } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
+import { HomeIcon, UserCircleIcon } from 'react-native-heroicons/outline';
 import { Session } from '@supabase/supabase-js';
 
 import HomeScreen from './src/screens/HomeScreen';
@@ -15,7 +15,9 @@ import InicialScreen from './src/screens/InicialScreen';
 import RecuperarPasswordScreen from './src/screens/RecuperarPasswordScreen';
 import TodasReceitasScreen from './src/screens/TodasReceitasScreen';
 import ReceitasRelacionadasScreen from './src/screens/ReceitasRelacionadasScreen';
+import SugestaoIAScreen from './src/screens/SugestaoIAScreen';
 import { supabase } from './lib/supabase';
+import { AlertProvider } from './componentes/AlertaCustom';
 
 // Tipos das rotas para TypeScript
 export type RootStackParamList = {
@@ -31,6 +33,7 @@ export type RootStackParamList = {
     ingredientesAtuais: string[];
     receitaAtualNome: string;
   };
+  SugestaoIA: undefined;
 };
 
 export type TabParamList = {
@@ -42,7 +45,7 @@ const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
   branco: '#FFFFFF',
-  bege: '#F5F0E1',
+  bege: '#FFF1CE',
 };
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -52,9 +55,14 @@ function TabNavigator() {
     <Tab.Navigator
        screenOptions={{
          headerShown: false,
+         tabBarShowLabel: false,
          tabBarActiveTintColor: cores.verde,
          tabBarInactiveTintColor: '#000000',
          tabBarStyle: {
+           position: 'absolute',
+           left: 0,
+           right: 0,
+           bottom: 0,
            backgroundColor: cores.branco,
            borderTopWidth: 0,
            borderTopLeftRadius: 20,
@@ -64,7 +72,8 @@ function TabNavigator() {
            shadowOffset: { width: 0, height: -2 },
            shadowOpacity: 0.08,
            shadowRadius: 4,
-           height: 65,
+           height: 75,
+           paddingTop: 14,
        },
         }}
     >
@@ -74,7 +83,7 @@ function TabNavigator() {
         component={HomeScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <HomeIcon color={color} size={size} strokeWidth={2} />
           ),
         }}
       />
@@ -83,7 +92,7 @@ function TabNavigator() {
         component={ProfileScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <UserCircleIcon color={color} size={size} strokeWidth={2} />
           ),
         }}
       />
@@ -95,40 +104,27 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [recuperandoPassword, setRecuperandoPassword] = useState(false);
+  const [emailRecuperacao, setEmailRecuperacao] = useState('');
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setRecuperandoPassword(true);
-      }
-      setSession(session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Deep link: troca o ?code=... pela sessão de recovery (Supabase PKCE flow)
-  useEffect(() => {
-    async function tratarLink(url: string | null) {
-      if (!url) return;
-      const match = url.match(/[?&]code=([^&]+)/);
-      if (!match) return;
-      const code = decodeURIComponent(match[1]);
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        console.warn('exchangeCodeForSession error:', error.message);
-      }
-    }
+  function iniciarRecuperacao(email: string) {
+    setEmailRecuperacao(email);
+    setRecuperandoPassword(true);
+  }
 
-    Linking.getInitialURL().then(tratarLink);
-    const sub = Linking.addEventListener('url', ({ url }) => tratarLink(url));
-    return () => sub.remove();
-  }, []);
+  async function terminarRecuperacao() {
+    await supabase.auth.signOut();
+    setEmailRecuperacao('');
+    setRecuperandoPassword(false);
+  }
 
   if (loading) {
     return (
@@ -139,12 +135,18 @@ export default function App() {
   }
 
   return (
+    <AlertProvider>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {recuperandoPassword ? (
-          // Fluxo de recuperação de password — abre via deep link
+          // Fluxo de recuperação de password via OTP (código de 6 dígitos por email)
           <Stack.Screen name="RecuperarPassword">
-            {() => <RecuperarPasswordScreen onConcluido={() => setRecuperandoPassword(false)} />}
+            {() => (
+              <RecuperarPasswordScreen
+                email={emailRecuperacao}
+                onConcluido={terminarRecuperacao}
+              />
+            )}
           </Stack.Screen>
         ) : session ? (
           // Utilizador autenticado — só vê Tabs e detalhe de receita
@@ -153,20 +155,25 @@ export default function App() {
             <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
             <Stack.Screen name="TodasReceitas" component={TodasReceitasScreen} />
             <Stack.Screen name="ReceitasRelacionadas" component={ReceitasRelacionadasScreen} />
+            <Stack.Screen name="SugestaoIA" component={SugestaoIAScreen} />
           </>
         ) : (
           // Sem sessão — onboarding + auth, com Tabs disponível para modo "convidado"
           <>
             <Stack.Screen name="Inicial" component={InicialScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Login">
+              {() => <LoginScreen onIniciarRecuperacao={iniciarRecuperacao} />}
+            </Stack.Screen>
             <Stack.Screen name="Registo" component={RegistoScreen} />
             <Stack.Screen name="Tabs" component={TabNavigator} />
             <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
             <Stack.Screen name="TodasReceitas" component={TodasReceitasScreen} />
             <Stack.Screen name="ReceitasRelacionadas" component={ReceitasRelacionadasScreen} />
+            <Stack.Screen name="SugestaoIA" component={SugestaoIAScreen} />
           </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    </AlertProvider>
   );
 }

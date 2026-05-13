@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
 } from 'react-native';
@@ -17,6 +16,7 @@ import { Receita } from '../../types';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
+import { useAlert } from '../../componentes/AlertaCustom';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -29,6 +29,7 @@ const cores = {
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NavProp>();
+  const { showAlert } = useAlert();
   const [nomeUtilizador, setNomeUtilizador] = useState<string | null>(null);
   const [favoritos, setFavoritos] = useState<Receita[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,24 +132,33 @@ export default function ProfileScreen() {
 
     if (error) {
       setFavoritos(favoritosAnteriores);
-      Alert.alert('Erro', 'Não foi possível remover dos favoritos.');
+      showAlert({
+        titulo: 'Erro',
+        mensagem: 'Não foi possível remover dos favoritos.',
+        tipo: 'erro',
+      });
       console.warn('Erro ao remover favorito:', error.message);
     }
   }
 
   async function handleLogout() {
-    Alert.alert('Terminar sessão', 'Tens a certeza que queres sair?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut();
-          // O onAuthStateChange em App.tsx deteta SIGNED_OUT e troca para
-          // AuthNavigator automaticamente.
+    showAlert({
+      titulo: 'Terminar sessão',
+      mensagem: 'Tens a certeza que queres sair?',
+      tipo: 'aviso',
+      botoes: [
+        { label: 'Cancelar', estilo: 'cancelar' },
+        {
+          label: 'Sair',
+          estilo: 'destrutivo',
+          onPress: async () => {
+            await supabase.auth.signOut();
+            // O onAuthStateChange em App.tsx deteta SIGNED_OUT e troca para
+            // AuthNavigator automaticamente.
+          },
         },
-      },
-    ]);
+      ],
+    });
   }
 
   if (loading) {
@@ -184,7 +194,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollConteudo}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollConteudo} overScrollMode="never">
       <View style={styles.cartaoPerfil}>
         <View style={styles.avatarContainer}>
           <Ionicons name="person-circle" size={56} color={cores.verde} />
@@ -236,7 +246,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.bege },
-  scrollConteudo: { padding: 16, paddingBottom: 32 },
+  scrollConteudo: { padding: 16, paddingBottom: 90 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: cores.bege },
   anonContainer: {
     flex: 1,

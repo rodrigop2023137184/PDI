@@ -7,11 +7,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   Image,
   ActivityIndicator,
   Animated,
 } from 'react-native';
+import { useAlert } from '../../componentes/AlertaCustom';
 // Aproximação à Anton usando fontes do sistema (sem importar):
 // iOS  → Impact (sans-serif condensada, muito pesada — quase idêntica à Anton)
 // Android → sans-serif-condensed (com weight 900 dá um look condensed black)
@@ -35,6 +35,7 @@ const cores = {
 
 export default function RegistoScreen() {
   const navigation = useNavigation<NavProp>();
+  const { showAlert } = useAlert();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -140,25 +141,41 @@ export default function RegistoScreen() {
     if (nome.length < 2) {
       setNameError(false);
       requestAnimationFrame(() => setNameError(true));
-      Alert.alert('Nome inválido', 'O nome deve ter pelo menos 2 caracteres.');
+      showAlert({
+        titulo: 'Nome inválido',
+        mensagem: 'O nome deve ter pelo menos 2 caracteres.',
+        tipo: 'aviso',
+      });
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
       setEmailError(false);
       requestAnimationFrame(() => setEmailError(true));
-      Alert.alert('Email inválido', 'Verifica o formato do email.');
+      showAlert({
+        titulo: 'Email inválido',
+        mensagem: 'Verifica o formato do email.',
+        tipo: 'aviso',
+      });
       return;
     }
     if (password !== confirmPassword) {
       setPassError(false); setConfirmError(false);
       requestAnimationFrame(() => { setPassError(true); setConfirmError(true); });
-      Alert.alert('Palavras-passe diferentes', 'A confirmação não corresponde.');
+      showAlert({
+        titulo: 'Palavras-passe diferentes',
+        mensagem: 'A confirmação não corresponde.',
+        tipo: 'aviso',
+      });
       return;
     }
     if (password.length < 6) {
       setPassError(false);
       requestAnimationFrame(() => setPassError(true));
-      Alert.alert('Palavra-passe fraca', 'A palavra-passe tem de ter pelo menos 6 caracteres.');
+      showAlert({
+        titulo: 'Palavra-passe fraca',
+        mensagem: 'A palavra-passe tem de ter pelo menos 6 caracteres.',
+        tipo: 'aviso',
+      });
       return;
     }
 
@@ -176,7 +193,7 @@ export default function RegistoScreen() {
         : /email rate limit exceeded/i.test(error.message)
         ? 'Demasiados pedidos de registo. Tenta novamente dentro de uma hora.'
         : error.message;
-      Alert.alert('Erro ao registar', msg);
+      showAlert({ titulo: 'Erro ao registar', mensagem: msg, tipo: 'erro' });
       return;
     }
 
@@ -198,11 +215,13 @@ export default function RegistoScreen() {
     // Sem sessão imediata → email confirmation está ativa.
     setLoading(false);
     await showSuccessCheckmark();
-    Alert.alert(
-      'Confirma o teu email',
-      'Enviámos-te um link de confirmação. Confirma o email antes de iniciar sessão.',
-      [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-    );
+    showAlert({
+      titulo: 'Confirma o teu email',
+      mensagem:
+        'Enviámos-te um link de confirmação. Confirma o email antes de iniciar sessão.',
+      tipo: 'sucesso',
+      botoes: [{ label: 'OK', onPress: () => navigation.navigate('Login') }],
+    });
   }
 
   return (

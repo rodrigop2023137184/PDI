@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   // "Mais Tarde"
   maisTardeBotao: {
     position: 'absolute',
-    top: 30,
+    top: 70,
     right: 20,
     zIndex: 10,
     padding: 8,
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   // Rodapé
   rodape: {
     paddingHorizontal: 28,
-    paddingBottom: 140,
+    paddingBottom: 50,
   },
   titulo: {
     fontFamily: interLike,

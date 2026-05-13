@@ -54,10 +54,24 @@ export default function ReceitasRelacionadasScreen() {
         return;
       }
 
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const idsValidos = ingredientesAtuais.filter((id) => UUID_REGEX.test(id));
+      if (idsValidos.length === 0) {
+        setReceitas([]);
+        setLoading(false);
+        return;
+      }
+
+      const orFilter = idsValidos
+        .map((id) => `ingredientes.cs.[{"ingrediente_id":"${id}"}]`)
+        .join(',');
+
       const { data, error } = await supabase
         .from('receitas')
         .select('id, nome, imagem_url, prep_tempo_min, dieta_type, ingredientes')
-        .neq('id', receitaAtualId);
+        .neq('id', receitaAtualId)
+        .or(orFilter)
+        .limit(50);
 
       if (error || !data) {
         setReceitas([]);
@@ -65,7 +79,7 @@ export default function ReceitasRelacionadasScreen() {
         return;
       }
 
-      const idsAtuais = new Set(ingredientesAtuais);
+      const idsAtuais = new Set(idsValidos);
 
       const filtradas = (data as (Receita & { ingredientes: ReceitaIngrediente[] })[])
         .map((r) => {

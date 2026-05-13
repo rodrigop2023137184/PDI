@@ -153,12 +153,18 @@ export default function HomeScreen({ navigation }: Props) {
       if (altoProteina) query = query.gte('proteinas_g', LIMITE_ALTA_PROTEINA);
       if (baixoGordura) query = query.lte('fats_g', LIMITE_BAIXA_GORDURA);
 
-      const { data, error } = await query
-        .order('data_criacao', { ascending: false })
-        .limit(10);
+      const { data, error } = await query.limit(50);
 
       if (error) throw error;
-      setRecomendadas((data as Receita[]) ?? []);
+
+      // Baralha o pool e mostra 10 receitas aleatórias.
+      // Fisher-Yates evita o viés do .sort(() => Math.random() - 0.5).
+      const pool = [...((data as Receita[]) ?? [])];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      setRecomendadas(pool.slice(0, 10));
     } catch (error) {
       console.error('Erro ao carregar receitas:', error);
     } finally {
@@ -215,39 +221,40 @@ export default function HomeScreen({ navigation }: Props) {
         ? [...ingredientes, pesquisa.trim().toLowerCase()]
         : ingredientes;
 
-      // Passo 1 — ir buscar os IDs dos ingredientes pelo nome (case-insensitive, um por um)
-      const resultadosIngs = await Promise.all(
-        listaFinal.map(nome =>
-          supabase
-            .from('ingredientes')
-            .select('id, nome')
-            .ilike('nome', nome)
-            .maybeSingle()
-        )
-      );
+      // Passo 1 — ir buscar os IDs de todos os ingredientes numa única query.
+      // Assume que `ingredientes.nome` está normalizado em minúsculas na BD
+      // (o cliente já faz .toLowerCase() antes de adicionar à lista).
+      const listaUnica = Array.from(new Set(listaFinal));
+
+      const { data: ingsData, error: ingsError } = await supabase
+        .from('ingredientes')
+        .select('id, nome')
+        .in('nome', listaUnica);
+
+      if (ingsError) throw ingsError;
 
       // Se algum ingrediente não foi encontrado → sem resultados
-      const faltaAlgum = resultadosIngs.some(r => !r.data);
-      if (faltaAlgum) {
+      if (!ingsData || ingsData.length < listaUnica.length) {
         setResultados([]);
-        setPesquisando(false);
         return;
       }
 
-      const ids = resultadosIngs.map(r => r.data!.id);
+      const ids = ingsData.map(r => r.id);
 
       // Passo 2 — filtrar receitas que contêm todos os ingredientes
       let query = supabase
         .from('receitas')
         .select('id, nome, imagem_url, prep_tempo_min, dieta_type');
 
-      ids.forEach(id => {
-        query = query.filter(
-          'ingredientes',
-          'cs',
-          `[{"ingrediente_id": "${id}"}]`
-        );
-      });
+      // O .contains() do supabase-js, com um array, gera sintaxe de array
+      // nativo de Postgres ({val1,val2}) — incompatível com JSONB. Usamos
+      // .filter() com JSON.stringify para gerar o JSON correto, mantendo
+      // o escape seguro que o stringify faz.
+      query = query.filter(
+        'ingredientes',
+        'cs',
+        JSON.stringify(ids.map((id) => ({ ingrediente_id: id })))
+      );
 
       const { data, error } = await query.limit(20);
       if (error) throw error;
@@ -326,7 +333,9 @@ export default function HomeScreen({ navigation }: Props) {
   const dadosParaMostrar = resultados.length > 0 ? resultados : recomendadas;
   const tituloSecao =
     resultados.length > 0
-      ? `Resultados para "${pesquisa}"`
+      ? pesquisa.trim()
+        ? `Resultados para "${pesquisa.trim()}"`
+        : 'Resultados'
       : 'Recomendações do Chefe';
 
   // Animação stagger: cada card faz fade-in + slide-up quando os dados mudam
@@ -408,6 +417,24 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
 
+      {/* CTA Sugerir com IA */}
+      <TouchableOpacity
+        style={styles.ctaIA}
+        onPress={() => navigation.navigate('SugestaoIA')}
+        activeOpacity={0.85}
+      >
+        <View style={styles.ctaIAIcone}>
+          <Ionicons name="sparkles" size={20} color={cores.branco} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.ctaIATitulo}>Sugerir com IA</Text>
+          <Text style={styles.ctaIASubtitulo}>
+            Diz-me o que tens em casa e eu sugiro receitas
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={cores.laranja} />
+      </TouchableOpacity>
+
       {/* Botões de filtro por dieta */}
       <View style={styles.filtrosContainer}>
         {filtros.map((filtro, index) => (
@@ -440,6 +467,7 @@ export default function HomeScreen({ navigation }: Props) {
       {/* Lista de receitas */}
       <ScrollView
         contentContainerStyle={styles.scrollConteudo}
+        overScrollMode="never"
         refreshControl={
           <RefreshControl
             refreshing={loading}
@@ -629,7 +657,7 @@ export default function HomeScreen({ navigation }: Props) {
 // ── Estilos ───────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.bege, padding: 16 },
-  scrollConteudo: { flexGrow: 1, paddingBottom: 80 },
+  scrollConteudo: { flexGrow: 1, paddingBottom: 90 },
 
   // Saudação
   saudacaoContainer: { marginTop: 24, marginBottom: 16 },
@@ -675,6 +703,39 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   filtroTexto: { fontWeight: '600', fontSize: 13 },
+
+  // CTA Sugerir com IA
+  ctaIA: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: cores.branco,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: cores.laranja,
+  },
+  ctaIAIcone: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: cores.laranja,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  ctaIATitulo: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#222',
+  },
+  ctaIASubtitulo: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 2,
+  },
 
   // Cabeçalho da secção
   secaoHeader: {

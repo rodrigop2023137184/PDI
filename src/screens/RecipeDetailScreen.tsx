@@ -8,10 +8,18 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
-  Alert,
   Animated,
   Easing,
+  Modal,
+  Pressable,
 } from 'react-native';
+import { useAlert } from '../../componentes/AlertaCustom';
+import {
+  gerarVariacao,
+  TipoVariacao,
+  VariacaoReceita,
+  ROTULO_VARIACAO,
+} from '../../lib/ia';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,12 +49,65 @@ const { width } = Dimensions.get('window');
 // ── Componente ────────────────────────────────────────
 export default function RecipeDetailScreen({ navigation, route }: Props) {
   const { receitaId } = route.params;
+  const { showAlert } = useAlert();
   const [receita, setReceita] = useState<Receita | null>(null);
   const [ingredientesDetalhes, setIngredientesDetalhes] = useState<IngredienteDetalhado[]>([]);
   const [loading, setLoading] = useState(true);
   const [abaAtiva, setAbaAtiva] = useState<'ingredientes' | 'instrucoes'>('ingredientes');
   const [favorito, setFavorito] = useState(false);
   const [favoritoLoading, setFavoritoLoading] = useState(false);
+
+  // Variação com IA
+  const [modalVariacaoVisivel, setModalVariacaoVisivel] = useState(false);
+  const [modalResultadoVisivel, setModalResultadoVisivel] = useState(false);
+  const [tipoSelecionado, setTipoSelecionado] = useState<TipoVariacao | null>(null);
+  const [loadingVariacao, setLoadingVariacao] = useState(false);
+  const [variacaoGerada, setVariacaoGerada] = useState<VariacaoReceita | null>(null);
+
+  async function handleGerarVariacao(tipo: TipoVariacao) {
+    if (!receita) return;
+
+    // Pré-verifica sessão para evitar fazer a chamada ao servidor só para
+    // receber 401 e dar uma mensagem mais simpática a convidados.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setModalVariacaoVisivel(false);
+      showAlert({
+        titulo: 'Ups! Precisas de uma conta',
+        mensagem:
+          'A geração de variações por IA é uma funcionalidade exclusiva para utilizadores registados. Faz login ou cria conta para experimentar.',
+        tipo: 'aviso',
+      });
+      return;
+    }
+
+    setTipoSelecionado(tipo);
+    setLoadingVariacao(true);
+    try {
+      const resultado = await gerarVariacao(
+        {
+          nome: receita.nome,
+          ingredientes: ingredientesDetalhes.map((i) => ({
+            nome: i.ingrediente?.nome ?? 'ingrediente',
+            quantidade: i.quantity,
+          })),
+          instrucoes: [...receita.instrucoes]
+            .sort((a, b) => a.step - b.step)
+            .map((p) => p.text),
+        },
+        tipo
+      );
+      setVariacaoGerada(resultado);
+      setModalVariacaoVisivel(false);
+      setModalResultadoVisivel(true);
+    } catch (error) {
+      const mensagem =
+        error instanceof Error ? error.message : 'Erro desconhecido';
+      showAlert({ titulo: 'Erro', mensagem, tipo: 'erro' });
+    } finally {
+      setLoadingVariacao(false);
+    }
+  }
 
   // Indicador laranja deslizante das abas
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -69,7 +130,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     carregarReceita();
     verificarFavorito();
-  }, []);
+  }, [receitaId]);
 
   async function verificarFavorito() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -89,10 +150,11 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
   async function toggleFavorito() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      Alert.alert(
-        'Inicia sessão',
-        'Tens de iniciar sessão para guardar receitas favoritas.'
-      );
+      showAlert({
+        titulo: 'Inicia sessão',
+        mensagem: 'Tens de iniciar sessão para guardar receitas favoritas.',
+        tipo: 'aviso',
+      });
       return;
     }
     if (favoritoLoading) return;
@@ -107,7 +169,11 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
         .insert({ user_id: user.id, receitas_id: receitaId });
       if (error && !/duplicate key|already exists/i.test(error.message)) {
         setFavorito(false);
-        Alert.alert('Erro', 'Não foi possível adicionar aos favoritos.');
+        showAlert({
+          titulo: 'Erro',
+          mensagem: 'Não foi possível adicionar aos favoritos.',
+          tipo: 'erro',
+        });
         console.warn('Erro ao adicionar favorito:', error.message);
       }
     } else {
@@ -118,7 +184,11 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
         .eq('receitas_id', receitaId);
       if (error) {
         setFavorito(true);
-        Alert.alert('Erro', 'Não foi possível remover dos favoritos.');
+        showAlert({
+          titulo: 'Erro',
+          mensagem: 'Não foi possível remover dos favoritos.',
+          tipo: 'erro',
+        });
         console.warn('Erro ao remover favorito:', error.message);
       }
     }
@@ -135,10 +205,24 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
         .single();
 
       if (error) throw error;
-      setReceita(data as Receita);
+
+      // Normaliza colunas JSONB que podem vir null (receitas parciais ou
+      // migradas sem dados) para que o resto do código possa assumir arrays.
+      const receitaSegura: Receita = {
+        ...(data as Receita),
+        ingredientes: (data.ingredientes as ReceitaIngrediente[] | null) ?? [],
+        instrucoes: (data.instrucoes as Receita['instrucoes'] | null) ?? [],
+      };
+      setReceita(receitaSegura);
+
+      // Se a receita não tiver ingredientes, salta o passo do join.
+      if (receitaSegura.ingredientes.length === 0) {
+        setIngredientesDetalhes([]);
+        return;
+      }
 
       // Buscar detalhes dos ingredientes
-      const ids = (data.ingredientes as ReceitaIngrediente[]).map(i => i.ingrediente_id);
+      const ids = receitaSegura.ingredientes.map((i) => i.ingrediente_id);
 
       const { data: ingsData, error: ingsError } = await supabase
         .from('ingredientes')
@@ -148,9 +232,9 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
       if (ingsError) throw ingsError;
 
       // Juntar quantity com os detalhes do ingrediente
-      const joined: IngredienteDetalhado[] = (data.ingredientes as ReceitaIngrediente[]).map(item => ({
+      const joined: IngredienteDetalhado[] = receitaSegura.ingredientes.map((item) => ({
         ...item,
-        ingrediente: (ingsData ?? []).find(i => i.id === item.ingrediente_id) as Ingrediente,
+        ingrediente: (ingsData ?? []).find((i) => i.id === item.ingrediente_id) as Ingrediente,
       }));
 
       setIngredientesDetalhes(joined);
@@ -179,7 +263,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollConteudo}>
+      <ScrollView contentContainerStyle={styles.scrollConteudo} overScrollMode="never">
 
         {/* Imagem de topo */}
         <View style={styles.imagemContainer}>
@@ -315,6 +399,16 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
             </View>
           )}
 
+          {/* Botão Gerar variação com IA */}
+          <TouchableOpacity
+            style={styles.botaoVariacao}
+            onPress={() => setModalVariacaoVisivel(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="sparkles" size={18} color={cores.branco} />
+            <Text style={styles.botaoVariacaoTexto}>  Gerar variação com IA</Text>
+          </TouchableOpacity>
+
           {/* Receitas relacionadas */}
           <View style={styles.relacionadasHeader}>
             <Text style={styles.relacionadasTitulo}>Receitas Relacionadas</Text>
@@ -337,6 +431,123 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
           />
         </View>
       </ScrollView>
+
+      {/* Modal A — Escolher tipo de variação */}
+      <Modal
+        visible={modalVariacaoVisivel}
+        animationType="slide"
+        transparent
+        onRequestClose={() => !loadingVariacao && setModalVariacaoVisivel(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => !loadingVariacao && setModalVariacaoVisivel(false)}
+        >
+          <Pressable
+            style={styles.modalConteudo}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitulo}>Gerar variação</Text>
+            <Text style={styles.modalSubtitulo}>
+              Escolhe o tipo de variação que queres gerar a partir desta receita.
+            </Text>
+
+            <View style={styles.modalChipsContainer}>
+              {(Object.keys(ROTULO_VARIACAO) as TipoVariacao[]).map((tipo) => {
+                const ativo = tipoSelecionado === tipo && loadingVariacao;
+                return (
+                  <TouchableOpacity
+                    key={tipo}
+                    style={[styles.modalChip, ativo && styles.modalChipAtivo]}
+                    onPress={() => handleGerarVariacao(tipo)}
+                    disabled={loadingVariacao}
+                    activeOpacity={0.8}
+                  >
+                    {ativo ? (
+                      <View style={styles.modalChipLoadingLinha}>
+                        <ActivityIndicator size="small" color={cores.branco} />
+                        <Text style={[styles.modalChipTexto, styles.modalChipTextoAtivo]}>
+                          {'  '}A pensar...
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.modalChipTexto}>{ROTULO_VARIACAO[tipo]}</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal B — Resultado da variação */}
+      <Modal
+        visible={modalResultadoVisivel}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalResultadoVisivel(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalConteudo, { maxHeight: '85%' }]}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalResultadoHeader}>
+              <Text style={styles.modalResultadoEtiqueta}>
+                {tipoSelecionado ? ROTULO_VARIACAO[tipoSelecionado] : ''}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setModalResultadoVisivel(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={24} color="#888" />
+              </TouchableOpacity>
+            </View>
+
+            {variacaoGerada && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.variacaoNome}>{variacaoGerada.nome}</Text>
+                <View style={styles.variacaoTempoLinha}>
+                  <Ionicons name="time-outline" size={14} color={cores.verde} />
+                  <Text style={styles.variacaoTempoTexto}>
+                    {' '}{variacaoGerada.tempo_min} min
+                  </Text>
+                </View>
+
+                {variacaoGerada.notas && (
+                  <View style={styles.variacaoNotasCaixa}>
+                    <Text style={styles.variacaoNotasTitulo}>Alterações</Text>
+                    <Text style={styles.variacaoNotasTexto}>
+                      {variacaoGerada.notas}
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={styles.seccaoVariacaoTitulo}>Ingredientes</Text>
+                {variacaoGerada.ingredientes.map((ing, i) => (
+                  <Text key={i} style={styles.variacaoIngredienteLinha}>
+                    • {ing.quantidade} {ing.nome}
+                  </Text>
+                ))}
+
+                <Text style={[styles.seccaoVariacaoTitulo, { marginTop: 16 }]}>
+                  Instruções
+                </Text>
+                {variacaoGerada.instrucoes.map((passo, i) => (
+                  <View key={i} style={styles.variacaoPassoLinha}>
+                    <Text style={styles.variacaoPassoNumero}>{i + 1}.</Text>
+                    <Text style={styles.variacaoPassoTexto}>{passo}</Text>
+                  </View>
+                ))}
+
+                <Text style={styles.variacaoAviso}>
+                  Variação gerada por IA — verifica os passos antes de cozinhar.
+                </Text>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -360,18 +571,31 @@ function ReceitasRelacionadas({
         return;
       }
 
-      // Busca todas as outras receitas com os ingredientes (JSONB) para filtrar localmente
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const idsValidos = ingredientesAtuais.filter((id) => UUID_REGEX.test(id));
+      if (idsValidos.length === 0) {
+        setRelacionadas([]);
+        return;
+      }
+
+      // Filtra na BD: só receitas que partilham >= 1 ingrediente
+      const orFilter = idsValidos
+        .map((id) => `ingredientes.cs.[{"ingrediente_id":"${id}"}]`)
+        .join(',');
+
       const { data, error } = await supabase
         .from('receitas')
         .select('id, nome, imagem_url, prep_tempo_min, dieta_type, ingredientes')
-        .neq('id', receitaAtualId);
+        .neq('id', receitaAtualId)
+        .or(orFilter)
+        .limit(50);
 
       if (error || !data) {
         setRelacionadas([]);
         return;
       }
 
-      const idsAtuais = new Set(ingredientesAtuais);
+      const idsAtuais = new Set(idsValidos);
 
       // Filtra as que partilham >= 1 ingrediente e ordena pelo nº de ingredientes em comum
       const filtradas = (data as (Receita & { ingredientes: ReceitaIngrediente[] })[])
@@ -400,7 +624,12 @@ function ReceitasRelacionadas({
   }
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      overScrollMode="never"
+      contentContainerStyle={styles.relacionadasScroll}
+    >
       {relacionadas.map((item) => (
         <TouchableOpacity
           key={item.id}
@@ -587,6 +816,7 @@ const styles = StyleSheet.create({
   },
   relacionadasTitulo: { fontSize: 18, fontWeight: 'bold', color: '#222' },
   verMaisVerde: { fontSize: 14, color: cores.verde, fontWeight: 'bold' },
+  relacionadasScroll: { paddingVertical: 6, paddingHorizontal: 2 },
   relacionadaCard: {
     width: 110,
     marginRight: 12,
@@ -601,5 +831,178 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     padding: 8,
+  },
+
+  // Botão Gerar variação
+  botaoVariacao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: cores.laranja,
+    borderRadius: 30,
+    paddingVertical: 14,
+    marginTop: 8,
+    elevation: 3,
+  },
+  botaoVariacaoTexto: {
+    color: cores.branco,
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+
+  // Modal — backdrop e contentor base
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalConteudo: {
+    backgroundColor: cores.bege,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CCC',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalTitulo: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 6,
+  },
+  modalSubtitulo: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+
+  // Modal A — chips de tipo de variação
+  modalChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  modalChip: {
+    backgroundColor: cores.branco,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    elevation: 1,
+  },
+  modalChipAtivo: {
+    backgroundColor: cores.laranja,
+  },
+  modalChipTexto: {
+    color: '#444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalChipTextoAtivo: {
+    color: cores.branco,
+  },
+  modalChipLoadingLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // Modal B — resultado da variação
+  modalResultadoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalResultadoEtiqueta: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: cores.laranja,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  variacaoNome: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 6,
+  },
+  variacaoTempoLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  variacaoTempoTexto: {
+    fontSize: 13,
+    color: cores.verde,
+    fontWeight: '600',
+  },
+  variacaoNotasCaixa: {
+    backgroundColor: cores.branco,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: cores.laranja,
+  },
+  variacaoNotasTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: cores.laranja,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  variacaoNotasTexto: {
+    fontSize: 13,
+    color: '#444',
+    lineHeight: 19,
+  },
+  seccaoVariacaoTitulo: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  variacaoIngredienteLinha: {
+    fontSize: 14,
+    color: '#444',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  variacaoPassoLinha: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  variacaoPassoNumero: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: cores.laranja,
+    width: 24,
+  },
+  variacaoPassoTexto: {
+    flex: 1,
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 20,
+  },
+  variacaoAviso: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+    fontStyle: 'italic',
+    paddingHorizontal: 16,
   },
 });

@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,8 +17,13 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { RootStackParamList } from '../../App';
 import AnimatedInput from '../animacoes/AnimatedInput';
+import { useAlert } from '../../componentes/AlertaCustom';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
+
+type Props = {
+  onIniciarRecuperacao: (email: string) => void;
+};
 
 const cores = {
   verde: '#37914B',
@@ -29,8 +33,9 @@ const cores = {
   cinzaTexto: '#333',
 };
 
-export default function LoginScreen() {
+export default function LoginScreen({ onIniciarRecuperacao }: Props) {
   const navigation = useNavigation<NavProp>();
+  const { showAlert } = useAlert();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -87,7 +92,7 @@ export default function LoginScreen() {
         : /Email not confirmed/i.test(error.message)
         ? 'Confirma o teu email antes de iniciares sessão.'
         : error.message;
-      Alert.alert('Erro ao entrar', msg);
+      showAlert({ titulo: 'Erro ao entrar', mensagem: msg, tipo: 'erro' });
       return;
     }
     // Sucesso → onAuthStateChange dispara em App.tsx e o stack troca para Tabs automaticamente.
@@ -98,20 +103,14 @@ export default function LoginScreen() {
     if (!emailNormalizado || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
       setEmailError(false);
       requestAnimationFrame(() => setEmailError(true));
-      Alert.alert('Email em falta', 'Introduz o teu email no campo acima primeiro.');
+      showAlert({
+        titulo: 'Email em falta',
+        mensagem: 'Introduz o teu email no campo acima primeiro.',
+        tipo: 'aviso',
+      });
       return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(emailNormalizado, {
-      redirectTo: 'komikalate://reset-password',
-    });
-    if (error) {
-      Alert.alert('Erro', error.message);
-      return;
-    }
-    Alert.alert(
-      'Email enviado',
-      'Verifica a tua caixa de correio e segue as instruções para redefinir a palavra-passe.'
-    );
+    onIniciarRecuperacao(emailNormalizado);
   }
 
   return (
