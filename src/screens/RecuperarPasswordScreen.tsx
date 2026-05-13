@@ -90,12 +90,12 @@ export default function RecuperarPasswordScreen({ email, onConcluido }: Props) {
   // ── Passo: verificar código ───────────────────────
   async function handleVerificarCodigo() {
     const token = codigo.trim();
-    if (token.length !== 6 || !/^\d{6}$/.test(token)) {
+    if (!/^\d{6,10}$/.test(token)) {
       setCodigoError(false);
       requestAnimationFrame(() => setCodigoError(true));
       showAlert({
         titulo: 'Código inválido',
-        mensagem: 'Introduz o código de 6 dígitos que recebeste por email.',
+        mensagem: 'Introduz o código numérico que recebeste por email.',
         tipo: 'aviso',
       });
       return;
@@ -185,7 +185,7 @@ export default function RecuperarPasswordScreen({ email, onConcluido }: Props) {
     : 'A enviar código…';
 
   const subtitulo = isCodigo
-    ? `Introduz o código de 6 dígitos que enviámos para ${email}.`
+    ? `Introduz o código que enviámos para ${email}.`
     : isPassword
     ? 'Escolhe uma nova palavra-passe.'
     : '';
@@ -224,12 +224,12 @@ export default function RecuperarPasswordScreen({ email, onConcluido }: Props) {
             <Animated.View style={[styles.form, { opacity: formAnim, transform: [{ translateY: formY }] }]}>
               {isCodigo && (
                 <AnimatedInput
-                  label="Código de 6 dígitos"
+                  label="Código de verificação"
                   value={codigo}
                   onChangeText={(t: string) => { setCodigo(t.replace(/\D/g, '')); setCodigoError(false); }}
                   error={codigoError}
                   keyboardType="number-pad"
-                  maxLength={6}
+                  maxLength={10}
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="done"
