@@ -197,7 +197,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
 
   async function carregarReceita() {
     try {
-      // Buscar receita completa
+      // receita completa
       const { data, error } = await supabase
         .from('receitas')
         .select('*')
@@ -206,8 +206,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
 
       if (error) throw error;
 
-      // Normaliza colunas JSONB que podem vir null (receitas parciais ou
-      // migradas sem dados) para que o resto do código possa assumir arrays.
+      // Normaliza colunas JSONB que podem vir null para que o resto do código possa assumir arrays.
       const receitaSegura: Receita = {
         ...(data as Receita),
         ingredientes: (data.ingredientes as ReceitaIngrediente[] | null) ?? [],
@@ -221,7 +220,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
         return;
       }
 
-      // Buscar detalhes dos ingredientes
       const ids = receitaSegura.ingredientes.map((i) => i.ingrediente_id);
 
       const { data: ingsData, error: ingsError } = await supabase
@@ -231,7 +229,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
 
       if (ingsError) throw ingsError;
 
-      // Juntar quantity com os detalhes do ingrediente
       const joined: IngredienteDetalhado[] = receitaSegura.ingredientes.map((item) => ({
         ...item,
         ingrediente: (ingsData ?? []).find((i) => i.id === item.ingrediente_id) as Ingrediente,
@@ -265,14 +262,12 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollConteudo} overScrollMode="never">
 
-        {/* Imagem de topo */}
         <View style={styles.imagemContainer}>
           <Image
             source={{ uri: receita.imagem_url ?? undefined }}
             style={styles.imagem}
           />
 
-          {/* Botão voltar */}
           <TouchableOpacity
             style={styles.botaoVoltar}
             onPress={() => navigation.goBack()}
@@ -280,7 +275,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
             <Ionicons name="close" size={20} color="#333" />
           </TouchableOpacity>
 
-          {/* Botão favorito */}
           <TouchableOpacity
             style={styles.botaoFavorito}
             onPress={toggleFavorito}
@@ -294,10 +288,8 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </View>
 
-        {/* Conteúdo principal */}
         <View style={styles.conteudo}>
 
-          {/* Nome e tempo */}
           <View style={styles.cabecalho}>
             <Text style={styles.nome}>{receita.nome}</Text>
             <View style={styles.tempoBadge}>
@@ -306,7 +298,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
             </View>
           </View>
 
-          {/* Valores nutricionais */}
           <View style={styles.nutricionaisGrid}>
             <View style={styles.nutriCard}>
               <MaterialCommunityIcons name="bread-slice-outline" size={24} color="orange" />
@@ -326,7 +317,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
             </View>
           </View>
 
-          {/* Abas Ingredientes / Instruções */}
           <View
             style={styles.abasContainer}
             onLayout={(e) => setLarguraInternaAbas(e.nativeEvent.layout.width - 8)}
@@ -357,7 +347,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </View>
 
-          {/* Conteúdo da aba ativa */}
           {abaAtiva === 'ingredientes' ? (
             <View>
               <Text style={styles.subTitulo}>
@@ -399,7 +388,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {/* Botão Gerar variação com IA */}
           <TouchableOpacity
             style={styles.botaoVariacao}
             onPress={() => setModalVariacaoVisivel(true)}
@@ -409,7 +397,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
             <Text style={styles.botaoVariacaoTexto}>  Gerar variação com IA</Text>
           </TouchableOpacity>
 
-          {/* Receitas relacionadas */}
           <View style={styles.relacionadasHeader}>
             <Text style={styles.relacionadasTitulo}>Receitas Relacionadas</Text>
             <TouchableOpacity
@@ -432,7 +419,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
         </View>
       </ScrollView>
 
-      {/* Modal A — Escolher tipo de variação */}
       <Modal
         visible={modalVariacaoVisivel}
         animationType="slide"
@@ -482,7 +468,6 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
         </Pressable>
       </Modal>
 
-      {/* Modal B — Resultado da variação */}
       <Modal
         visible={modalResultadoVisivel}
         animationType="slide"
@@ -552,7 +537,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
   );
 }
 
-// ── Subcomponente: Receitas Relacionadas ──────────────
+// Receitas Relacionadas 
 function ReceitasRelacionadas({
   ingredientesAtuais,
   receitaAtualId,
@@ -649,13 +634,11 @@ function ReceitasRelacionadas({
   );
 }
 
-// ── Estilos ───────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.bege },
   scrollConteudo: { paddingBottom: 40 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  // Imagem
   imagemContainer: { width: '100%', height: 280, position: 'relative' },
   imagem: { width: '100%', height: '100%' },
   botaoVoltar: {
@@ -677,7 +660,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
 
-  // Conteúdo
   conteudo: {
     backgroundColor: cores.bege,
     borderTopLeftRadius: 24,
@@ -686,7 +668,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
-  // Cabeçalho
   cabecalho: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -711,11 +692,9 @@ const styles = StyleSheet.create({
   },
   tempoTexto: { fontSize: 13, color: cores.verde, fontWeight: '600' },
 
-  // Descrição
   descricao: { fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 16 },
   verMaisLaranja: { color: cores.laranja, fontWeight: '600' },
 
-  // Nutricionais
   nutricionaisGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -735,7 +714,6 @@ const styles = StyleSheet.create({
   nutriIcone: { fontSize: 20 },
   nutriValor: { fontSize: 13, fontWeight: '600', color: '#444' },
 
-  // Abas
   abasContainer: {
     flexDirection: 'row',
     backgroundColor: cores.branco,
@@ -762,7 +740,6 @@ const styles = StyleSheet.create({
   abaTexto: { fontSize: 14, fontWeight: '600', color: '#888' },
   abaTextoAtivo: { color: cores.branco },
 
-  // Ingredientes
   subTitulo: { fontSize: 13, color: '#888', marginBottom: 12 },
   ingredienteCard: {
     flexDirection: 'row',
@@ -790,7 +767,6 @@ const styles = StyleSheet.create({
   ingredienteNome: { flex: 1, fontSize: 15, fontWeight: '600', color: '#333' },
   ingredienteQtd: { fontSize: 13, color: '#888' },
 
-  // Instruções
   instrucaoCard: {
     backgroundColor: cores.branco,
     borderRadius: 16,
@@ -806,7 +782,6 @@ const styles = StyleSheet.create({
   },
   instrucaoTexto: { fontSize: 14, color: '#444', lineHeight: 22 },
 
-  // Relacionadas
   relacionadasHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -833,7 +808,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
 
-  // Botão Gerar variação
   botaoVariacao: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -850,7 +824,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // Modal — backdrop e contentor base
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -885,7 +858,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Modal A — chips de tipo de variação
   modalChipsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -915,7 +887,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Modal B — resultado da variação
   modalResultadoHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -42,7 +42,6 @@ export default function LoginScreen({ onIniciarRecuperacao }: Props) {
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
 
-  // ── Stagger de entrada ────────────────────────────
   const logoAnim = useRef(new Animated.Value(0)).current;
   const formAnim = useRef(new Animated.Value(0)).current;
   const bottomAnim = useRef(new Animated.Value(0)).current;
@@ -58,14 +57,12 @@ export default function LoginScreen({ onIniciarRecuperacao }: Props) {
     ]).start();
   }, []);
 
-  // ── Fade-out antes de navegar ─────────────────────
   const screenOpacity = useRef(new Animated.Value(1)).current;
   function navigateWithFade(screen: keyof RootStackParamList) {
     Animated.timing(screenOpacity, { toValue: 0, duration: 200, useNativeDriver: true })
       .start(() => { screenOpacity.setValue(1); navigation.navigate(screen as any); });
   }
 
-  // ── Press feedback ────────────────────────────────
   const buttonScale = useRef(new Animated.Value(1)).current;
   function onPressIn() { Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 4 }).start(); }
   function onPressOut() { Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start(); }
@@ -95,7 +92,6 @@ export default function LoginScreen({ onIniciarRecuperacao }: Props) {
       showAlert({ titulo: 'Erro ao entrar', mensagem: msg, tipo: 'erro' });
       return;
     }
-    // Sucesso → onAuthStateChange dispara em App.tsx e o stack troca para Tabs automaticamente.
   }
 
   async function handleResetPassword() {
@@ -115,14 +111,12 @@ export default function LoginScreen({ onIniciarRecuperacao }: Props) {
 
   return (
     <Animated.View style={{ flex: 1, opacity: screenOpacity, backgroundColor: cores.bege }}>
-      {/* Fundo ilustrado — preenche o ecrã todo */}
       <Image
         source={require('../../assets/fundo_login.png')}
         style={styles.fundo}
         resizeMode="cover"
       />
 
-      {/* Botão voltar */}
       <TouchableOpacity
         style={styles.botaoVoltar}
         onPress={() => navigation.goBack()}
@@ -139,7 +133,6 @@ export default function LoginScreen({ onIniciarRecuperacao }: Props) {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Grupo 1 — Logo */}
           <Animated.View style={[styles.logoContainer, { opacity: logoAnim, transform: [{ translateY: logoY }] }]}>
             <Image
               source={require('../../assets/logo.png')}
@@ -148,7 +141,6 @@ export default function LoginScreen({ onIniciarRecuperacao }: Props) {
             />
           </Animated.View>
 
-          {/* Grupo 2 — Campos */}
           <Animated.View style={[styles.form, { opacity: formAnim, transform: [{ translateY: formY }] }]}>
             <AnimatedInput
               label="E-mail"
@@ -179,7 +171,6 @@ export default function LoginScreen({ onIniciarRecuperacao }: Props) {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Grupo 3 — Botão + link */}
           <Animated.View style={[styles.bottomActions, { opacity: bottomAnim, transform: [{ translateY: bottomY }] }]}>
             <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
               <TouchableOpacity
@@ -234,7 +225,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Logo
   logoContainer: {
     alignItems: 'center',
     marginTop: 80,
@@ -245,7 +235,6 @@ const styles = StyleSheet.create({
     height: 150,
   },
 
-  // Formulário
   form: { width: '100%' },
   bottomActions: { width: '100%', marginTop: 8 },
   esqueceu: {
@@ -256,7 +245,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Botão
   botaoEntrar: {
     backgroundColor: cores.verde,
     borderRadius: 30,
@@ -271,7 +259,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // Registo
   registoLinha: {
     flexDirection: 'row',
     justifyContent: 'center',

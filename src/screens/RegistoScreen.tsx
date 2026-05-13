@@ -12,9 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { useAlert } from '../../componentes/AlertaCustom';
-// Aproximação à Anton usando fontes do sistema (sem importar):
-// iOS  → Impact (sans-serif condensada, muito pesada — quase idêntica à Anton)
-// Android → sans-serif-condensed (com weight 900 dá um look condensed black)
+
 const antonLike = Platform.select({ ios: 'Impact', android: 'sans-serif-condensed' });
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -42,18 +40,15 @@ export default function RegistoScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ── Erros por campo (disparam shake) ─────────────
   const [nameError, setNameError] = useState(false);
   const [emailError, setEmailError] = useState(false);
   const [passError, setPassError] = useState(false);
   const [confirmError, setConfirmError] = useState(false);
 
-  // ── Checkmark de sucesso ──────────────────────────
   const [showCheckmark, setShowCheckmark] = useState(false);
   const checkScale = useRef(new Animated.Value(0)).current;
   const checkOpacity = useRef(new Animated.Value(0)).current;
 
-  // ── Stagger de entrada ────────────────────────────
   const headerAnim = useRef(new Animated.Value(0)).current;
   const formAnim = useRef(new Animated.Value(0)).current;
   const bottomAnim = useRef(new Animated.Value(0)).current;
@@ -70,7 +65,6 @@ export default function RegistoScreen() {
     ]).start();
   }, []);
 
-  // ── Fade-out antes de navegar ─────────────────────
   const screenOpacity = useRef(new Animated.Value(1)).current;
 
   function navigateWithFade(screen: keyof RootStackParamList) {
@@ -84,7 +78,6 @@ export default function RegistoScreen() {
     });
   }
 
-  // ── Checkmark de sucesso ──────────────────────────
   function showSuccessCheckmark(): Promise<void> {
     return new Promise((resolve) => {
       setShowCheckmark(true);
@@ -105,7 +98,6 @@ export default function RegistoScreen() {
     });
   }
 
-  // ── Press feedback no botão ───────────────────────
   const buttonScale = useRef(new Animated.Value(1)).current;
   function onPressIn() { Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 4 }).start(); }
   function onPressOut() { Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start(); }
@@ -114,7 +106,6 @@ export default function RegistoScreen() {
     const nome = displayName.trim();
     const emailNormalizado = email.trim().toLowerCase();
 
-    // Validação com shake por campo
     let hasError = false;
     if (!nome) {
       setNameError(false);
@@ -197,8 +188,7 @@ export default function RegistoScreen() {
       return;
     }
 
-    // Se o utilizador foi criado E há sessão imediata (email confirmation off),
-    // tentamos garantir o perfil em public.users.
+
     if (data.user && data.session) {
       const { error: erroInsert } = await supabase.from('users').insert({
         id: data.user.id,
@@ -212,7 +202,6 @@ export default function RegistoScreen() {
       return;
     }
 
-    // Sem sessão imediata → email confirmation está ativa.
     setLoading(false);
     await showSuccessCheckmark();
     showAlert({
@@ -226,14 +215,12 @@ export default function RegistoScreen() {
 
   return (
     <Animated.View style={{ flex: 1, opacity: screenOpacity, backgroundColor: cores.bege }}>
-      {/* Fundo ilustrado — preenche o ecrã todo */}
       <Image
         source={require('../../assets/fundo_registo.png')}
         style={styles.fundo}
         resizeMode="cover"
       />
 
-      {/* Botão voltar */}
       <TouchableOpacity
         style={styles.botaoVoltar}
         onPress={() => navigation.goBack()}
@@ -250,13 +237,11 @@ export default function RegistoScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Grupo 1 — Cabeçalho */}
           <Animated.View style={[styles.cabecalho, { opacity: headerAnim, transform: [{ translateY: headerY }] }]}>
             <Text style={styles.wordmark}>KomiKalate</Text>
             <Text style={styles.titulo}>Regista-te</Text>
           </Animated.View>
 
-          {/* Grupo 2 — Campos */}
           <Animated.View style={[styles.form, { opacity: formAnim, transform: [{ translateY: formY }] }]}>
             <AnimatedInput
               label="Nome de Utilizador"
@@ -306,7 +291,6 @@ export default function RegistoScreen() {
             />
           </Animated.View>
 
-          {/* Grupo 3 — Botão + link */}
           <Animated.View style={[styles.bottomActions, { opacity: bottomAnim, transform: [{ translateY: bottomY }] }]}>
             <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
               <TouchableOpacity
@@ -335,7 +319,6 @@ export default function RegistoScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Overlay do checkmark de sucesso */}
       {showCheckmark && (
         <View style={styles.checkmarkOverlay} pointerEvents="none">
           <Animated.View style={[styles.checkmarkContainer, { opacity: checkOpacity, transform: [{ scale: checkScale }] }]}>
@@ -372,7 +355,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Cabeçalho — wordmark + título
   cabecalho: {
     marginTop: 60,
     marginBottom: 20,
@@ -392,11 +374,9 @@ const styles = StyleSheet.create({
     color: cores.verde,
   },
 
-  // Formulário
   form: { width: '100%' },
   bottomActions: { width: '100%' },
 
-  // Botão
   botaoRegistar: {
     backgroundColor: cores.verde,
     borderRadius: 30,
@@ -418,7 +398,6 @@ const styles = StyleSheet.create({
   loginTexto: { color: cores.cinzaTexto, fontSize: 14 },
   loginLink: { color: cores.verde, fontSize: 14, fontWeight: 'bold' },
 
-  // Checkmark overlay
   checkmarkOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(245, 240, 225, 0.92)',

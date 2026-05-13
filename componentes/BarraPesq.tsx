@@ -6,8 +6,6 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-// ── Tipos ─────────────────────────────────────────────
 interface BarraPesqProps {
   valor: string;
   onMudar: (texto: string) => void;
@@ -16,24 +14,20 @@ interface BarraPesqProps {
   onAdicionar?: () => void;
 }
 
-// ── Constantes ────────────────────────────────────────
 const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
   branco: '#FFFFFF',
 };
 
-// ── Componente ────────────────────────────────────────
 export default function BarraPesq({ valor, onMudar, onPesquisar, onFiltros, onAdicionar }: BarraPesqProps) {
   return (
     <View style={styles.container}>
 
-      {/* Botão pesquisa — lado esquerdo */}
       <TouchableOpacity style={styles.botaoPesquisa} onPress={onPesquisar}>
         <Ionicons name="search" size={20} color={cores.verde} />
       </TouchableOpacity>
 
-      {/* Campo de texto — centro */}
       <TextInput
         style={styles.input}
         placeholder="Pesquisar receitas..."
@@ -55,7 +49,6 @@ export default function BarraPesq({ valor, onMudar, onPesquisar, onFiltros, onAd
        </TouchableOpacity>
       )}
 
-      {/* Botão filtros — lado direito */}
       {onFiltros && (
         <TouchableOpacity style={styles.botaoFiltros} onPress={onFiltros}>
           <Ionicons name="options-outline" size={20} color={cores.laranja} />
@@ -66,7 +59,6 @@ export default function BarraPesq({ valor, onMudar, onPesquisar, onFiltros, onAd
   );
 }
 
-// ── Estilos ───────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',

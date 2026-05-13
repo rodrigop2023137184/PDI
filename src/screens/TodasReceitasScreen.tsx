@@ -34,13 +34,8 @@ export default function TodasReceitasScreen() {
   const [loadingInicial, setLoadingInicial] = useState(true);
   const [loadingMais, setLoadingMais] = useState(false);
   const [temMais, setTemMais] = useState(true);
-
-  // Refs partilhadas pelas animações dos cards.
-  // - animsRef:  guarda o Animated.Value de cada receita (por id)
-  // - animadosRef: ids cuja animação já disparou — evita re-animar items existentes
   const animsRef = useRef<Map<string, Animated.Value>>(new Map());
   const animadosRef = useRef<Set<string>>(new Set());
-  // Guards para evitar disparos duplicados do onScroll
   const aCarregarRef = useRef(false);
   const temMaisRef = useRef(true);
 
@@ -89,7 +84,6 @@ export default function TodasReceitasScreen() {
     carregarMais();
   }, []);
 
-  // Anima apenas os items novos sempre que a lista cresce
   useEffect(() => {
     const aAnimar: Animated.Value[] = [];
     receitas.forEach((r) => {
@@ -123,7 +117,6 @@ export default function TodasReceitasScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Decoração de fundo — linhas verdes subtis */}
       <Image
         source={require('../../assets/linha_verde1.png')}
         style={styles.linhaDecoTopo}
@@ -242,7 +235,6 @@ const styles = StyleSheet.create({
   fim: { textAlign: 'center', color: '#999', paddingVertical: 20, fontSize: 13 },
   semResultados: { textAlign: 'center', color: '#999', marginTop: 32, fontSize: 15 },
 
-  // Decoração de fundo — linhas verdes subtis (não interceptam toques)
   linhaDecoTopo: {
     position: 'absolute',
     top: 70,

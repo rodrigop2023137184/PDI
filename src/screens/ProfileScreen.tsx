@@ -96,7 +96,6 @@ export default function ProfileScreen() {
     }
   }
 
-  // Animações stagger dos cards de favoritos: cada novo array gera valores 0→1
   const animacoesItens = useMemo(
     () => favoritos.map(() => new Animated.Value(0)),
     [favoritos]
@@ -153,8 +152,6 @@ export default function ProfileScreen() {
           estilo: 'destrutivo',
           onPress: async () => {
             await supabase.auth.signOut();
-            // O onAuthStateChange em App.tsx deteta SIGNED_OUT e troca para
-            // AuthNavigator automaticamente.
           },
         },
       ],

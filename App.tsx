@@ -19,7 +19,6 @@ import SugestaoIAScreen from './src/screens/SugestaoIAScreen';
 import { supabase } from './lib/supabase';
 import { AlertProvider } from './componentes/AlertaCustom';
 
-// Tipos das rotas para TypeScript
 export type RootStackParamList = {
   Inicial: undefined;
   Tabs: undefined;
@@ -139,7 +138,6 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {recuperandoPassword ? (
-          // Fluxo de recuperação de password via OTP (código de 6 dígitos por email)
           <Stack.Screen name="RecuperarPassword">
             {() => (
               <RecuperarPasswordScreen
@@ -149,7 +147,6 @@ export default function App() {
             )}
           </Stack.Screen>
         ) : session ? (
-          // Utilizador autenticado — só vê Tabs e detalhe de receita
           <>
             <Stack.Screen name="Tabs" component={TabNavigator} />
             <Stack.Screen name="DetalheReceita" component={RecipeDetailScreen} />
@@ -158,7 +155,6 @@ export default function App() {
             <Stack.Screen name="SugestaoIA" component={SugestaoIAScreen} />
           </>
         ) : (
-          // Sem sessão — onboarding + auth, com Tabs disponível para modo "convidado"
           <>
             <Stack.Screen name="Inicial" component={InicialScreen} />
             <Stack.Screen name="Login">

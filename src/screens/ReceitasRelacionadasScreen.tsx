@@ -35,7 +35,6 @@ export default function ReceitasRelacionadasScreen() {
   const [receitas, setReceitas] = useState<Receita[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Refs para animar apenas os items novos uma única vez
   const animsRef = useRef<Map<string, Animated.Value>>(new Map());
   const animadosRef = useRef<Set<string>>(new Set());
 
@@ -98,7 +97,6 @@ export default function ReceitasRelacionadasScreen() {
     carregar();
   }, [receitaAtualId, ingredientesAtuais]);
 
-  // Anima os items novos com stagger
   useEffect(() => {
     const aAnimar: Animated.Value[] = [];
     receitas.forEach((r) => {

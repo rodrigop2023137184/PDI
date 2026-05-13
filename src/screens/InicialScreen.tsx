@@ -9,9 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Aproximação à Inter usando fontes do sistema (sem importar):
-// iOS  → San Francisco (default) — geometria e métricas muito próximas da Inter
-// Android → Roboto (sans-serif) — neutra e legível, próxima da Inter
 const interLike = Platform.select({ ios: 'System', android: 'sans-serif' });
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,7 +29,6 @@ export default function InicialScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Fundo ilustrado — preenche o ecrã todo */}
       <Image
         source={require('../../assets/fundo_inicial.png')}
         style={styles.fundo}
@@ -40,7 +36,6 @@ export default function InicialScreen() {
       />
 
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Botão "Mais Tarde" */}
         <TouchableOpacity
           style={styles.maisTardeBotao}
           onPress={() => navigation.navigate('Tabs')}
@@ -48,10 +43,8 @@ export default function InicialScreen() {
           <Text style={styles.maisTardeTexto}>Mais Tarde</Text>
         </TouchableOpacity>
 
-        {/* Espaço vazio em cima — o fundo já tem o logo e as decorações */}
         <View style={{ flex: 1 }} />
 
-        {/* Rodapé — título e botões */}
         <View style={styles.rodape}>
           <Text style={styles.titulo}>
             Transforma ingredientes em{'\n'}momentos inesquecíveis
@@ -94,7 +87,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // "Mais Tarde"
   maisTardeBotao: {
     position: 'absolute',
     top: 70,
@@ -110,7 +102,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  // Rodapé
   rodape: {
     paddingHorizontal: 28,
     paddingBottom: 50,

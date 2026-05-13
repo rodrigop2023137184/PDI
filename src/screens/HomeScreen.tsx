@@ -21,14 +21,12 @@ import { supabase } from '../../lib/supabase';
 import { Receita } from '../../types';
 import { RootStackParamList } from '../../App';
 
-// ── Tipos ─────────────────────────────────────────────
 type HomeNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Tabs'>;
 
 interface Props {
   navigation: HomeNavigationProp;
 }
 
-// ── Constantes ────────────────────────────────────────
 const cores = {
   verde: '#37914B',
   laranja: '#FA9B2D',
@@ -63,7 +61,7 @@ const opcoesCalorias = [
   { label: '≤ 800 kcal', valor: 800 },
 ];
 
-// ── Componente ────────────────────────────────────────
+
 export default function HomeScreen({ navigation }: Props) {
   const [recomendadas, setRecomendadas] = useState<Receita[]>([]);
   const [loading, setLoading] = useState(false);
@@ -157,8 +155,7 @@ export default function HomeScreen({ navigation }: Props) {
 
       if (error) throw error;
 
-      // Baralha o pool e mostra 10 receitas aleatórias.
-      // Fisher-Yates evita o viés do .sort(() => Math.random() - 0.5).
+      // Baralha o pool e mostra 10 receitas aleatórias
       const pool = [...((data as Receita[]) ?? [])];
       for (let i = pool.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -215,15 +212,13 @@ export default function HomeScreen({ navigation }: Props) {
 
   setPesquisando(true);
   try {
-    // ── Pesquisa por ingredientes ──────────────────
+    //Pesquisa por ingredientes 
     if (ingredientes.length > 0) {
       const listaFinal = pesquisa.trim()
         ? [...ingredientes, pesquisa.trim().toLowerCase()]
         : ingredientes;
 
-      // Passo 1 — ir buscar os IDs de todos os ingredientes numa única query.
-      // Assume que `ingredientes.nome` está normalizado em minúsculas na BD
-      // (o cliente já faz .toLowerCase() antes de adicionar à lista).
+      //Ids de todos os ingredientes
       const listaUnica = Array.from(new Set(listaFinal));
 
       const { data: ingsData, error: ingsError } = await supabase
@@ -233,7 +228,6 @@ export default function HomeScreen({ navigation }: Props) {
 
       if (ingsError) throw ingsError;
 
-      // Se algum ingrediente não foi encontrado → sem resultados
       if (!ingsData || ingsData.length < listaUnica.length) {
         setResultados([]);
         return;
@@ -241,15 +235,12 @@ export default function HomeScreen({ navigation }: Props) {
 
       const ids = ingsData.map(r => r.id);
 
-      // Passo 2 — filtrar receitas que contêm todos os ingredientes
+      // Filtrar receitas que contêm todos os ingredientes
       let query = supabase
         .from('receitas')
         .select('id, nome, imagem_url, prep_tempo_min, dieta_type');
 
-      // O .contains() do supabase-js, com um array, gera sintaxe de array
-      // nativo de Postgres ({val1,val2}) — incompatível com JSONB. Usamos
-      // .filter() com JSON.stringify para gerar o JSON correto, mantendo
-      // o escape seguro que o stringify faz.
+      
       query = query.filter(
         'ingredientes',
         'cs',
@@ -260,7 +251,7 @@ export default function HomeScreen({ navigation }: Props) {
       if (error) throw error;
       setResultados((data as Receita[]) ?? []);
 
-    // ── Pesquisa por nome ──────────────────────────
+    //Pesquisa por nome
     } else {
       const { data, error } = await supabase
         .from('receitas')
@@ -338,7 +329,7 @@ export default function HomeScreen({ navigation }: Props) {
         : 'Resultados'
       : 'Recomendações do Chefe';
 
-  // Animação stagger: cada card faz fade-in + slide-up quando os dados mudam
+  //animações dos cards
   const animacoesItens = useMemo(
     () => dadosParaMostrar.map(() => new Animated.Value(0)),
     [dadosParaMostrar]
@@ -361,7 +352,6 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Decoração de fundo — linhas verdes subtis */}
       <Image
         source={require('../../assets/linha_verde1.png')}
         style={styles.linhaDecoTopo}
@@ -378,7 +368,6 @@ export default function HomeScreen({ navigation }: Props) {
         resizeMode="contain"
       />
 
-      {/* Saudação */}
       <View style={styles.saudacaoContainer}>
         <View style={styles.saudacaoLinha}>
           {getIconeSaudacao()}
@@ -387,7 +376,6 @@ export default function HomeScreen({ navigation }: Props) {
         <Text style={styles.nomeUtilizador}>{nomeUtilizador}</Text>
       </View>
 
-      {/* Barra de pesquisa */}
       <BarraPesq
         valor={pesquisa}
         onMudar={setPesquisa}
@@ -396,7 +384,6 @@ export default function HomeScreen({ navigation }: Props) {
         onFiltros={abrirModalFiltros}
       />
 
-      {/* Tags de ingredientes */}
       {ingredientes.length > 0 && (
         <View style={styles.tagsContainer}>
           {ingredientes.map((ing) => (
@@ -410,14 +397,12 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* Botão limpar pesquisa */}
       {resultados.length > 0 && (
         <TouchableOpacity onPress={limparPesquisa}>
           <Text style={styles.limparTexto}>✕ Limpar pesquisa</Text>
         </TouchableOpacity>
       )}
 
-      {/* CTA Sugerir com IA */}
       <TouchableOpacity
         style={styles.ctaIA}
         onPress={() => navigation.navigate('SugestaoIA')}
@@ -435,7 +420,6 @@ export default function HomeScreen({ navigation }: Props) {
         <Ionicons name="chevron-forward" size={20} color={cores.laranja} />
       </TouchableOpacity>
 
-      {/* Botões de filtro por dieta */}
       <View style={styles.filtrosContainer}>
         {filtros.map((filtro, index) => (
           <TouchableOpacity
@@ -464,7 +448,7 @@ export default function HomeScreen({ navigation }: Props) {
         ))}
       </View>
 
-      {/* Lista de receitas */}
+      {/* lista de receitas */}
       <ScrollView
         contentContainerStyle={styles.scrollConteudo}
         overScrollMode="never"
@@ -477,7 +461,6 @@ export default function HomeScreen({ navigation }: Props) {
           />
         }
       >
-        {/* Cabeçalho da secção */}
         <View style={styles.secaoHeader}>
           <Text style={styles.titulo}>{tituloSecao}</Text>
           {resultados.length === 0 && (
@@ -506,13 +489,11 @@ export default function HomeScreen({ navigation }: Props) {
                   style={styles.card}
                   onPress={() => navigation.navigate('DetalheReceita', { receitaId: item.id })}
                 >
-                  {/* Imagem à esquerda */}
                   <Image
                     source={{ uri: item.imagem_url ?? undefined }}
                     style={styles.imagem}
                   />
 
-                  {/* Texto ao centro */}
                   <View style={styles.cardInfo}>
                     <Text style={styles.nomeReceita} numberOfLines={2}>
                       {item.nome}
@@ -523,7 +504,6 @@ export default function HomeScreen({ navigation }: Props) {
                     </View>
                   </View>
 
-                  {/* Botão seta à direita */}
                   <View style={styles.botaoSeta}>
                     <Ionicons name="arrow-forward" size={18} color={cores.branco} />
                   </View>
@@ -534,7 +514,7 @@ export default function HomeScreen({ navigation }: Props) {
         )}
       </ScrollView>
 
-      {/* Modal de filtros */}
+      {/* filtros */}
       <Modal
         visible={modalFiltrosVisivel}
         animationType="slide"
@@ -551,7 +531,6 @@ export default function HomeScreen({ navigation }: Props) {
             onTouchEnd={(e) => e.stopPropagation()}
           >
 
-            {/* Zona de arrasto — handle + header */}
             <View {...panResponder.panHandlers}>
               <View style={styles.modalHandle} />
               <View style={styles.modalHeader}>
@@ -563,7 +542,6 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Dieta */}
               <Text style={styles.modalSecaoTitulo}>Tipo de dieta</Text>
               <View style={styles.modalChipsContainer}>
                 {opcoesDieta.map((op) => {
@@ -582,7 +560,6 @@ export default function HomeScreen({ navigation }: Props) {
                 })}
               </View>
 
-              {/* Tempo */}
               <Text style={styles.modalSecaoTitulo}>Tempo de preparação</Text>
               <View style={styles.modalChipsContainer}>
                 {opcoesTempo.map((op) => {
@@ -601,7 +578,6 @@ export default function HomeScreen({ navigation }: Props) {
                 })}
               </View>
 
-              {/* Calorias */}
               <Text style={styles.modalSecaoTitulo}>Calorias</Text>
               <View style={styles.modalChipsContainer}>
                 {opcoesCalorias.map((op) => {
@@ -620,7 +596,6 @@ export default function HomeScreen({ navigation }: Props) {
                 })}
               </View>
 
-              {/* Outros */}
               <Text style={styles.modalSecaoTitulo}>Outros</Text>
               <View style={styles.modalChipsContainer}>
                 <TouchableOpacity
@@ -642,7 +617,6 @@ export default function HomeScreen({ navigation }: Props) {
               </View>
             </ScrollView>
 
-            {/* Botão aplicar */}
             <TouchableOpacity style={styles.modalBotaoAplicar} onPress={aplicarFiltrosModal}>
               <Text style={styles.modalBotaoAplicarTexto}>Aplicar filtros</Text>
             </TouchableOpacity>
@@ -654,18 +628,15 @@ export default function HomeScreen({ navigation }: Props) {
   );
 }
 
-// ── Estilos ───────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: cores.bege, padding: 16 },
   scrollConteudo: { flexGrow: 1, paddingBottom: 90 },
 
-  // Saudação
   saudacaoContainer: { marginTop: 24, marginBottom: 16 },
   saudacaoLinha: { flexDirection: 'row', alignItems: 'center' },
   saudacao: { fontSize: 16, color: '#888' },
   nomeUtilizador: { fontSize: 26, fontWeight: 'bold', color: '#222' },
 
-  // Tags de ingredientes
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -687,10 +658,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Limpar pesquisa
   limparTexto: { color: cores.laranja, marginBottom: 8, fontWeight: '600' },
 
-  // Filtros de dieta
   filtrosContainer: {
     flexDirection: 'row',
     marginBottom: 16,
@@ -704,7 +673,6 @@ const styles = StyleSheet.create({
   },
   filtroTexto: { fontWeight: '600', fontSize: 13 },
 
-  // CTA Sugerir com IA
   ctaIA: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -737,7 +705,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Cabeçalho da secção
   secaoHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -747,7 +714,6 @@ const styles = StyleSheet.create({
   titulo: { fontSize: 20, fontWeight: 'bold', color: '#222' },
   verMais: { fontSize: 14, color: cores.verde, fontWeight: 'bold'},
 
-  // Cards
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -789,10 +755,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
 
-  // Sem resultados
   semResultados: { textAlign: 'center', color: '#999', marginTop: 32, fontSize: 15 },
 
-  // Decoração de fundo — linhas verdes subtis (não interceptam toques)
   linhaDecoTopo: {
     position: 'absolute',
     top: 70,
@@ -821,7 +785,6 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
 
-  // Modal de filtros
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',

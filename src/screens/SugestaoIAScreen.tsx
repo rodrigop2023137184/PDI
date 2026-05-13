@@ -37,8 +37,6 @@ export default function SugestaoIAScreen() {
   const [loading, setLoading] = useState(false);
   const [receitas, setReceitas] = useState<ReceitaIA[]>([]);
   const [expandida, setExpandida] = useState<number | null>(null);
-
-  // Animações dos cards de resultado (mesmo padrão de TodasReceitas/Profile)
   const animsRef = useRef<Map<string, Animated.Value>>(new Map());
   const animadosRef = useRef<Set<string>>(new Set());
 
@@ -88,8 +86,6 @@ export default function SugestaoIAScreen() {
       return;
     }
 
-    // Pré-verifica sessão para evitar fazer a chamada ao servidor só para
-    // receber 401 e dar uma mensagem mais simpática a convidados.
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       showAlert({

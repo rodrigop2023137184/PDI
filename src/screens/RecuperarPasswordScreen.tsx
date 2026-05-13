@@ -44,7 +44,7 @@ export default function RecuperarPasswordScreen({ email, onConcluido }: Props) {
 
   const [loading, setLoading] = useState(false);
 
-  // ── Stagger de entrada ────────────────────────────
+  
   const logoAnim = useRef(new Animated.Value(0)).current;
   const formAnim = useRef(new Animated.Value(0)).current;
   const bottomAnim = useRef(new Animated.Value(0)).current;
@@ -60,7 +60,7 @@ export default function RecuperarPasswordScreen({ email, onConcluido }: Props) {
     ]).start();
   }, []);
 
-  // ── Envio inicial do código (uma única vez) ──────
+  //Envio inicial do código 
   const envioIniciado = useRef(false);
   useEffect(() => {
     if (envioIniciado.current) return;
@@ -87,7 +87,7 @@ export default function RecuperarPasswordScreen({ email, onConcluido }: Props) {
   function onPressIn() { Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 4 }).start(); }
   function onPressOut() { Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start(); }
 
-  // ── Passo: verificar código ───────────────────────
+  // verificar código 
   async function handleVerificarCodigo() {
     const token = codigo.trim();
     if (!/^\d{6,10}$/.test(token)) {
@@ -124,7 +124,7 @@ export default function RecuperarPasswordScreen({ email, onConcluido }: Props) {
     setPasso('password');
   }
 
-  // ── Passo: definir nova password ──────────────────
+  // definir nova password
   async function handleAtualizarPassword() {
     if (loading) return;
     let hasError = false;

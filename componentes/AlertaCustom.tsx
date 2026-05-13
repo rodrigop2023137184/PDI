@@ -1,18 +1,3 @@
-// Alert custom estilizado — substituto do Alert.alert nativo.
-//
-// Uso:
-//   const { showAlert } = useAlert();
-//   showAlert({ titulo: 'Erro', mensagem: '...', tipo: 'erro' });
-//
-//   showAlert({
-//     titulo: 'Terminar sessão',
-//     mensagem: 'Tens a certeza?',
-//     tipo: 'aviso',
-//     botoes: [
-//       { label: 'Cancelar', estilo: 'cancelar' },
-//       { label: 'Sair', estilo: 'destrutivo', onPress: () => signOut() },
-//     ],
-//   });
 
 import React, {
   createContext,
