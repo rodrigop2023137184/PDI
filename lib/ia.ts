@@ -11,13 +11,49 @@ import { z } from 'zod';
 import { supabase } from './supabase';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-// Remove numeração que a IA por vezes adiciona mesmo com instrução no prompt.
-// Apanha: "1.", "1)", "1:", "1 -", "Passo 1.", "**1.**", etc. — sempre no início.
-// A UI já renderiza o número via index, daí o strip evitar "1. 1. ...".
+// Limpa cada instrução antes de a UI a mostrar.
+//
+// 1. Normaliza espaços brancos: a IA por vezes devolve quebras de linha
+//    embutidas (\n, \r\n) ou múltiplos espaços dentro de uma instrução. Isso
+//    causava quebras de linha prematuras (palavras a saltar para baixo com
+//    espaço a sobrar) e, no Android, o \r aparecia como um caráter solto
+//    (parecia um "R") no fim da frase. Colapsamos tudo num único espaço.
+// 2. Remove numeração que a IA por vezes adiciona mesmo com instrução no
+//    prompt. Apanha: "1.", "1)", "1:", "1 -", "Passo 1.", "**1.**", etc. —
+//    sempre no início. A UI já renderiza o número via index, daí o strip
+//    evitar "1. 1. ...".
 function limparNumeracao(passo: string): string {
   return passo
+    .replace(/\s+/g, ' ')
     .replace(/^\s*\**\s*(?:passo\s+)?\d+\s*[.\):\-]\s*\**\s*/i, '')
     .trim();
+}
+
+// Extrai a mensagem de erro real de uma falha do supabase.functions.invoke.
+//
+// Quando a Edge Function devolve um status non-2xx, o supabase-js cria um
+// FunctionsHttpError cuja `.message` é sempre o genérico
+// "Edge Function returned a non-2xx status code". A mensagem útil (ex.:
+// "Limite de pedidos atingido", "Configuração do servidor incompleta") está
+// no corpo da resposta, acessível via `error.context` (um objeto Response).
+async function mensagemDeErro(
+  error: unknown,
+  fallback: string
+): Promise<string> {
+  const ctx = (error as { context?: unknown })?.context;
+  // `context` é um Response clonável quando a função respondeu com corpo.
+  if (ctx && typeof (ctx as Response).json === 'function') {
+    try {
+      const corpo = await (ctx as Response).json();
+      if (corpo && typeof corpo === 'object' && 'error' in corpo) {
+        return String((corpo as { error: unknown }).error);
+      }
+    } catch {
+      // Corpo não-JSON ou já consumido — cai para a mensagem genérica.
+    }
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 // ── Schemas ───────────────────────────────────────────────────────────────
@@ -76,7 +112,7 @@ export async function sugerirReceitas(
   });
 
   if (error) {
-    throw new Error(error.message ?? 'Falha ao chamar o servidor de IA.');
+    throw new Error(await mensagemDeErro(error, 'Falha ao chamar o servidor de IA.'));
   }
 
   // A função pode devolver { error: "..." } com status 4xx/5xx.
@@ -109,7 +145,7 @@ export async function gerarVariacao(
   });
 
   if (error) {
-    throw new Error(error.message ?? 'Falha ao chamar o servidor de IA.');
+    throw new Error(await mensagemDeErro(error, 'Falha ao chamar o servidor de IA.'));
   }
 
   if (data && typeof data === 'object' && 'error' in data) {

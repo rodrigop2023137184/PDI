@@ -130,6 +130,75 @@ interface Pedido {
   ingredientes: string[];
 }
 
+// ── Chamada à API Gemini com resiliência ──────────────────────────────────
+// O modelo gemini-2.5-flash devolve 503 ("UNAVAILABLE / high demand") em picos
+// de procura. Em vez de falhar logo, tentamos de novo com backoff e, se
+// persistir, caímos para um modelo alternativo.
+const GEMINI_MODELOS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const STATUS_TRANSITORIO = new Set([429, 500, 502, 503, 504]);
+
+function dormir(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type ResultadoGemini =
+  | { ok: true; texto: string }
+  | { ok: false; status: number; detalhe: string };
+
+async function chamarGeminiComRetry(
+  apiKey: string,
+  corpo: unknown
+): Promise<ResultadoGemini> {
+  const corpoStr = JSON.stringify(corpo);
+  let ultimoStatus = 0;
+  let ultimoDetalhe = '';
+
+  for (const modelo of GEMINI_MODELOS) {
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: corpoStr,
+        }
+      );
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (texto) return { ok: true, texto };
+        // Resposta vazia não melhora com retry do mesmo modelo.
+        ultimoStatus = 502;
+        ultimoDetalhe = 'Resposta da IA vazia';
+        break;
+      }
+
+      ultimoStatus = resp.status;
+      ultimoDetalhe = await resp.text();
+      console.error(
+        `Gemini ${modelo} erro (tentativa ${tentativa + 1}):`,
+        resp.status,
+        ultimoDetalhe
+      );
+
+      // Erro não-transitório (ex.: 400 chave inválida) não melhora a insistir.
+      if (!STATUS_TRANSITORIO.has(resp.status)) {
+        return { ok: false, status: resp.status, detalhe: ultimoDetalhe };
+      }
+
+      // Backoff exponencial antes da próxima tentativa: 0.5s, 1s.
+      if (tentativa < 2) await dormir(500 * 2 ** tentativa);
+    }
+    // Esgotou as tentativas deste modelo → tenta o fallback.
+  }
+
+  return { ok: false, status: ultimoStatus, detalhe: ultimoDetalhe };
+}
+
 Deno.serve(async (req: Request) => {
   const cors = corsHeaders(req);
 
@@ -200,37 +269,31 @@ Deno.serve(async (req: Request) => {
     const userMessage = `Tenho em casa estes ingredientes: ${ingredientes.join(', ')}.
 Sugere 1 ou 2 receitas que eu possa fazer.`;
 
-    const geminiResponse = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: SYSTEM_PROMPT }],
-          },
-          contents: [
-            { role: 'user', parts: [{ text: userMessage }] },
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 8192,
-            responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
+    const resultado = await chamarGeminiComRetry(apiKey, {
+      systemInstruction: {
+        parts: [{ text: SYSTEM_PROMPT }],
+      },
+      contents: [
+        { role: 'user', parts: [{ text: userMessage }] },
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
+        responseSchema: RESPONSE_SCHEMA,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    if (!resultado.ok) {
+      const sobrecarregado =
+        resultado.status === 503 || resultado.status === 429;
+      return new Response(
+        JSON.stringify({
+          error: sobrecarregado
+            ? 'O serviço de IA está com muita procura neste momento. Tenta novamente daqui a um minuto.'
+            : 'Falha na chamada à API Gemini.',
         }),
-      }
-    );
-
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error('Gemini API erro:', geminiResponse.status, errText);
-      return new Response(
-        JSON.stringify({ error: 'Falha na chamada à API Gemini' }),
         {
           status: 502,
           headers: { ...cors, 'Content-Type': 'application/json' },
@@ -238,19 +301,7 @@ Sugere 1 ou 2 receitas que eu possa fazer.`;
       );
     }
 
-    const geminiData = await geminiResponse.json();
-    const texto = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!texto) {
-      console.error('Resposta Gemini sem texto:', JSON.stringify(geminiData));
-      return new Response(
-        JSON.stringify({ error: 'Resposta da IA vazia' }),
-        {
-          status: 502,
-          headers: { ...cors, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+    const texto = resultado.texto;
 
     // Com responseMimeType="application/json" + responseSchema, o texto é JSON válido.
     // Mesmo assim defendemo-nos com try-catch para podermos diagnosticar se cortar.
